@@ -178,8 +178,11 @@ taller is about 11 KB, far below DynamoDB's 400 KB limit per item.
 - **Open**: The spider is hard to see on a dark floor. Options are a lighter floor or a pale
   outline around sprites.
 
-A first sheet with this cast has been generated (`spritesheet.png`, `sprites.json`, and the script
-`make_sheet.py` with its list `cast.json`). It is not in a repository yet.
+A first sheet with this cast is in the RougeSocial repository: `spritesheet.png`, its index
+`sprites.json`, and the script `make_sheet.py` with its list `cast.json`.
+
+Sprites are derived from [Google's Noto Emoji](https://github.com/googlefonts/noto-emoji), licensed
+under Apache 2.0.
 
 ## 11. Not designed yet
 
