@@ -1,0 +1,17 @@
+[
+  {"name": "rat",      "codepoint": "1f400", "kind": "monster"},
+  {"name": "bat",      "codepoint": "1f987", "kind": "monster"},
+  {"name": "spider",   "codepoint": "1f577", "kind": "monster"},
+  {"name": "scorpion", "codepoint": "1f982", "kind": "monster"},
+  {"name": "snake",    "codepoint": "1f40d", "kind": "monster"},
+  {"name": "wolf",     "codepoint": "1f43a", "kind": "monster"},
+  {"name": "skeleton", "codepoint": "1f480", "kind": "monster"},
+  {"name": "ghost",    "codepoint": "1f47b", "kind": "monster"},
+  {"name": "ogre",     "codepoint": "1f479", "kind": "monster"},
+  {"name": "troll",    "codepoint": "1f9cc", "kind": "monster"},
+  {"name": "dragon",   "codepoint": "1f409", "kind": "monster"},
+  {"name": "chest",    "codepoint": "1f4b0", "kind": "object"},
+  {"name": "gold",     "codepoint": "1fa99", "kind": "object"},
+  {"name": "tombstone", "codepoint": "1faa6", "kind": "object"},
+  {"name": "player",   "codepoint": "1f9d9", "kind": "player"}
+]
