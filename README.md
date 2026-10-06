@@ -1,5 +1,3 @@
-# RougeSocial
-
 # Rogue Social: Design Notes
 
 A social media site where you earn the right to post by playing a turn-based dungeon crawler.
@@ -60,6 +58,8 @@ directly sets how much a player can say.
 - **Proposed**: Dying during a recovery run replaces the old dropped pile with whatever the player
   was carrying this time.
 - **Proposed**: A death floor is kept for one week, or until the player starts a new dungeon.
+- **Open**: Where the player re-enters a death floor. If they can start anywhere, they could start
+  beside the tombstone and skip the fight. Starting at the floor's original entrance avoids that.
 
 ## 5. Pause
 
@@ -92,12 +92,25 @@ directly sets how much a player can say.
 
 - **Decided**: The server keeps the whole floor and sends the player only the parts they can see,
   adding more as they reach the edge of what they know.
-- **Decided**: A second view shows a map of everywhere the player has been.
+- **Decided**: A map shows everywhere the player has been. It starts empty and fills in as they
+  explore.
+- **Decided**: The screen is laid out like a Nintendo DS or 3DS: the map and the play area are both
+  always visible, one above the other, and the map has a marker showing where the player is.
+- **Decided**: The play area has a limited view and is the only place monsters appear. A monster
+  that moves into somewhere the player has already been does not show on the map, so they cannot
+  tell it is there.
+- **Decided**: A tombstone marks where the player's gear lies after they die. It is shown on the
+  map during a recovery run.
 - **Decided**: Spells can reveal more of the map, or give a sense of where treasure or monsters
   are without revealing the maze around them.
 - **Proposed**: Sensed treasure and monsters appear as markers in unexplored darkness. Monster
   markers fade after a few turns, since monsters keep moving.
-- **Proposed**: The map shows terrain only. A monster is drawn only while it is in view.
+- **Proposed**: The map also marks any stairs the player has found.
+- **Proposed**: On a phone the map goes on top and the play area on the bottom, nearer the thumbs.
+- **Proposed**: A compass arrow at the edge of the play area points toward the tombstone when it is
+  out of view.
+- **Open**: How the map scales on large floors: shrink to fit everything explored, or keep a fixed
+  scale and scroll with the player.
 - **Open**: What counts as seeing. Options: a fixed radius around the player, true line of sight
   (blocked by walls), or Rogue-style (a whole room lights up on entry, corridors one step at a
   time). Suggested: line of sight on the current maze, Rogue-style once rooms exist.
@@ -118,22 +131,60 @@ directly sets how much a player can say.
 
 ## 9. Storage
 
-- **Decided**: Saved floors go in a database so they survive a player walking away for a day or
-  two. DynamoDB is the leading choice.
+- **Decided**: Everything lives in DynamoDB: the game and the social side. There is no relational
+  database. Part of the purpose of this project is hands-on NoSQL experience beyond storing
+  sessions and settings, and follows, likes, and feeds are where that experience comes from.
+- **Decided**: Saved floors go in the database so they survive a player walking away for a day or
+  two.
 - **Decided**: Store the whole floor, not just the random seed that generated it.
 - **Proposed**: One item per player for the saved floor, keyed by player ID. Dying overwrites it
   and starting a new dungeon deletes it.
 - **Proposed**: Use DynamoDB's automatic expiry for abandoned death floors, and also check the
   date when loading, because automatic deletion can lag.
-- **Proposed**: Keep gold and silver balances in the same table and use conditional writes, so
-  "spend 230 gold only if they have 230" is safe when two requests arrive at once.
+- **Proposed**: Gold and silver balances use conditional writes, so "spend 230 gold only if they
+  have 230" is safe when two requests arrive at once.
+- **Proposed**: Posting is one transaction: deduct the gold and create the post, or do neither.
+- **Proposed**: Banking is one transaction: credit the bank and delete the floor, or do neither.
+- **Proposed**: Posts are keyed by author with a timestamp sort key, so "this person's posts,
+  newest first" is a single query.
+- **Proposed**: Follows and likes are stored so they can be read in both directions ("who do I
+  follow" and "who follows me"), using a secondary index.
+- **Proposed**: The feed starts as a read-time merge: fetch recent posts from each followed person
+  and combine them. If that gets slow, switch to copying each new post into followers' feeds.
+- **Open**: The table design. DynamoDB tables are built around the queries they must answer, so
+  the feed and profile features in section 11 need sketching first.
 
 A floor is small. The current maze is about 700 characters as a grid; a floor four times wider and
 taller is about 11 KB, far below DynamoDB's 400 KB limit per item.
 
-## 10. Not designed yet
+## 10. Mark 1 art
 
-- The social side itself: the feed, following, replies, likes, and what a profile shows.
+- **Decided**: The first version has no custom art. Emoji stand in for monsters, treasure, and the
+  player.
+- **Decided**: The emoji are drawn once into a sprite sheet (one image holding every tile), and the
+  game draws from that image. Players' devices never render the emoji themselves, so everyone sees
+  the same pictures.
+- **Decided**: The cast includes a troll and a tombstone.
+- **Proposed**: The pictures come from Google's Noto Emoji, which is free to use this way.
+- **Proposed**: Tiles are 64 pixels. A small index file maps each sprite name to its place in the
+  sheet, and the game looks sprites up by name.
+- **Proposed**: Saved floors store a monster's type (`bat`), never its picture. Real art later
+  means repainting the sheet in the same layout, with no change to the server or to saved floors.
+- **Proposed**: The Mark 1 cast, weakest to strongest: rat, bat, spider, scorpion, snake, wolf,
+  skeleton, ghost, ogre, troll, dragon. Objects: chest (a money bag), gold coin, tombstone. The
+  player is a mage.
+- **Open**: How a tougher "elite" monster is shown. A red tint was tried and barely shows on the
+  ogre, which is already red. A coloured ring or a small crown would work for every monster.
+- **Open**: The spider is hard to see on a dark floor. Options are a lighter floor or a pale
+  outline around sprites.
+
+A first sheet with this cast has been generated (`spritesheet.png`, `sprites.json`, and the script
+`make_sheet.py` with its list `cast.json`). It is not in a repository yet.
+
+## 11. Not designed yet
+
+- The social side itself: the feed, following, replies, likes, and what a profile shows. This is
+  next, because the table design depends on it.
 - Accounts and sign-in.
 - Combat rules, monster types, gear, and item stats.
 - Whether it is intended that experienced players, who earn more gold per run, become the loudest
@@ -143,7 +194,7 @@ taller is about 11 KB, far below DynamoDB's 400 KB limit per item.
 
 ## Starting point: the Letter Maze code
 
-This repository currently holds Letter Maze, a small game with a Java 21 / Spring Boot backend and
+The MazeGame repository holds Letter Maze, a small game with a Java 21 / Spring Boot backend and
 a React frontend.
 
 **Carries over**
