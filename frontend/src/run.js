@@ -24,9 +24,13 @@ export function applyView(state, view, fresh) {
     status: view.status,
     gold: view.gold,
     player: view.player,
+    health: view.health,
+    stats: view.stats,
     onExit: view.onExit,
+    // Only the monsters in sight. Monsters are never remembered: they move.
+    monsters: view.monsters,
     known,
     visible: new Set(view.visible.map((t) => key(t.row, t.col))),
-    log: view.messages.length ? [...log, ...view.messages].slice(-4) : log,
+    log: view.messages.length ? [...log, ...view.messages].slice(-6) : log,
   };
 }

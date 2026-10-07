@@ -26,9 +26,12 @@ public class UserController {
     }
 
     /** What anyone may see about a player. Never includes the email. */
-    public record PublicUser(long userId, String username, OffsetDateTime joined) {
+    public record PublicUser(
+            long userId, String username, OffsetDateTime joined,
+            int level, int power, int defense, int maxHealth) {
         static PublicUser of(User u) {
-            return new PublicUser(u.userId(), u.username(), u.createdAt());
+            return new PublicUser(u.userId(), u.username(), u.createdAt(),
+                    u.level(), u.power(), u.defense(), u.maxHealth());
         }
     }
 

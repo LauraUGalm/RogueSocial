@@ -29,18 +29,15 @@ class RunServiceTest {
     private final Map<String, Long> deposits = new HashMap<>();
     private final Bank bank = (username, gold) -> deposits.merge(username, (long) gold, Long::sum);
 
-    private final RunService service = new RunService(new FloorGenerator(null) {
-        @Override
-        public Floor generate(Random random) {
-            return TestFloors.floor(List.of(
+    private final RunService service = new RunService(TestFloors.always(() -> TestFloors.floor(
+            List.of(
                     "#######",
                     "#.....#",
                     "#.#####",
                     "#.....#",
                     "#######"),
-                    new Pos(3, 1), new Pos(1, 3), Map.of(new Pos(3, 2), 10));
-        }
-    }, new InMemoryRunStore(), bank, new Random(), "laura");
+            new Pos(3, 1), new Pos(1, 3), Map.of(new Pos(3, 2), 10))),
+            new InMemoryRunStore(), bank, u -> TestFloors.STATS, new Random(), "laura");
 
     @Test
     void startsAtTheEntranceWhichIsTheOrigin() {
@@ -49,6 +46,8 @@ class RunServiceTest {
         assertThat(view.player()).isEqualTo(new Pos(0, 0));
         assertThat(view.turn()).isZero();
         assertThat(view.status()).isEqualTo(Run.Status.ACTIVE);
+        assertThat(view.health()).isEqualTo(20);
+        assertThat(view.stats()).isEqualTo(TestFloors.STATS);
         assertThat(view.remembered()).isNotEmpty();
         assertThat(view.visible()).contains(new Tile(0, 1, '.', 10));
     }
@@ -148,15 +147,11 @@ class RunServiceTest {
 
     @Test
     void ifTheBankFailsTheRunCarriesOn() {
-        RunService failing = new RunService(new FloorGenerator(null) {
-            @Override
-            public Floor generate(Random random) {
-                return TestFloors.floor(List.of("###", "#.#", "###"),
-                        new Pos(1, 1), new Pos(1, 1), Map.of());
-            }
-        }, new InMemoryRunStore(), (u, g) -> {
-            throw new IllegalStateException("database is down");
-        }, new Random(), "laura");
+        RunService failing = new RunService(TestFloors.always(() -> TestFloors.floor(
+                List.of("###", "#.#", "###"), new Pos(1, 1), new Pos(1, 1), Map.of())),
+                new InMemoryRunStore(), (u, g) -> {
+                    throw new IllegalStateException("database is down");
+                }, u -> TestFloors.STATS, new Random(), "laura");
         String id = failing.start().runId();
 
         assertThatThrownBy(() -> failing.act(id, 0, Action.LEAVE))

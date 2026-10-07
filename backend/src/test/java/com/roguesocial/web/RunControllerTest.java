@@ -11,9 +11,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
+import com.roguesocial.dungeon.PlayerStats;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.mockito.Mockito;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -22,6 +27,15 @@ class RunControllerTest {
     @Autowired
     private MockMvc mvc;
 
+    // Keeps these tests off the database.
+    @MockitoBean
+    private PlayerStats stats;
+
+    @BeforeEach
+    void startingStats() {
+        Mockito.when(stats.lookup(Mockito.anyString())).thenReturn(new PlayerStats.Stats(1, 5, 5, 20));
+    }
+
     private String startRun() throws Exception {
         String body = mvc.perform(post("/api/runs"))
                 .andExpect(status().isCreated())
@@ -29,6 +43,8 @@ class RunControllerTest {
                 .andExpect(jsonPath("$.player.col").value(0))
                 .andExpect(jsonPath("$.turn").value(0))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.health").value(20))
+                .andExpect(jsonPath("$.stats.power").value(5))
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.runId");
     }

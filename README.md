@@ -86,9 +86,46 @@ directly sets how much a player can say.
 - **Proposed**: Start positions keep a minimum distance from monsters and from the exit, and the
   start must always be able to reach the exit.
 - **Proposed**: A death floor keeps the tier it was generated at.
-- **Open**: The floor generator. The current maze code makes a pure maze with one path between any
-  two points. Rogue-style floors need rooms joined by corridors.
-- **Open**: How levelling works: what earns experience and how fast levels come.
+- **Decided**: Floors are a maze with rooms cut out of it. After the maze is generated, up to 4
+  rectangles of 2 to 4 cells a side have every wall inside them removed. The outer wall is never
+  touched, and removing walls only adds paths, so every floor stays solvable. Rooms keep a cell of
+  maze between them so they don't merge.
+- **Decided**: Each player has a level, power, defense and maximum health, stored on their
+  `users` row. Everyone starts at level 1 with 5 power, 5 defense and 20 health.
+- **Decided**: Each run starts at full health. The health a player has right now belongs to the
+  run, not the user.
+
+### Combat
+
+- **Decided**: An attack does the attacker's strength minus the defender's defense, at least 1.
+  The player's power is their strength.
+- **Decided**: Each turn a coin flip decides whether the player or the monsters act first.
+- **Decided**: A player can be attacked by more than one monster at once: every engaged monster
+  attacks on the monsters' half of the turn.
+- **Decided** (2026-10-06, after a playtest): Monsters only attack when the player stands and
+  fights. A monster is engaged if it was next to the player when the turn began and the player
+  attacks this turn. Stepping up to a monster, or away from one, never gives it a free hit.
+  Before this, stepping toward a bat and back again let it bite on both moves, and one bat landed
+  4 to 6 bites in a fight.
+- **Open**: As a result, monsters never start a fight: a player can walk past any monster
+  unharmed. A wait action, or monsters that strike when they reach the player, would change that.
+- **Decided**: Health stays on screen. The player's is in the status line; each monster in view
+  has a bar under it.
+- **Decided**: Walking into a monster attacks it.
+- **Decided**: The first monsters:
+
+  | Monster  | Health | Strength | Defense | Against a level 1 player |
+  |----------|-------:|---------:|--------:|--------------------------|
+  | Bat      | 3      | 2        | 1       | Hits for 1; dies to one hit of 4 |
+  | Scorpion | 10     | 7        | 3       | Hits for 2; takes five hits of 2 |
+
+- **Proposed** (as built): A monster that can see the player moves toward them; one that can't
+  wanders. Leaving at the exit happens before the monsters move. A level 1 floor has 4 bats and
+  2 scorpions, at least 12 steps from the entrance.
+- **Open**: Nothing heals yet, and a scorpion fight costs about 10 of a new player's 20 health,
+  so two scorpions can be fatal. Healing, or fewer scorpions on low floors, may be needed.
+- **Open**: How levelling works: what earns experience, how fast levels come, and how much power
+  and defense a level adds.
 - **Open**: How unseen monsters behave: wander, sleep until the player is near, or hunt.
 
 ## 7. What the player can see
@@ -220,7 +257,8 @@ a React frontend.
   it turn by turn.~~ Done: see "The code so far" below.
 - ~~The browser decides what was collected. The server has to decide.~~ Done.
 - There are no accounts, no database, and no monsters.
-- The generator makes a pure maze, not rooms and corridors.
+- ~~The generator makes a pure maze, not rooms and corridors.~~ Done: rooms are cut out of the
+  maze.
 
 Letter Maze itself is left untouched. The pieces that carried over were copied into this repository.
 
@@ -240,6 +278,8 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - Each turn must carry the current turn number. A replayed or out-of-order turn is rejected.
   Walking into a wall does not use a turn.
 - Positions sent to the browser are relative to the entrance.
+- Bats and scorpions, combat and death, with health on screen (see Combat in section 6).
+  Runs take the player's level, power, defense and maximum health from `users` when they start.
 - Standing on the exit (`>`), the player can leave (`L` or the button). That adds the gold they
   carry to their bank in Postgres and ends the run. The bank is credited before the run ends,
   so if the database is down the run simply carries on.
@@ -254,8 +294,11 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - There is a `users` table and an API to create and look up users, but no sign-in. The browser
   remembers its run ID in local storage.
 - Silver, and spending banked gold on posts, are not built.
-- No monsters, combat, death, banking, levels, the overview map, or the rate limit.
+- Death ends the run and loses the gold carried; the tombstone and recovery runs (section 4) are
+  not built. Killing monsters gives nothing yet (no drops, no experience).
+- No levels, gear, healing, the overview map, or the rate limit.
 - The player always starts at the entrance; choosing a start position is not built.
+- Rooms do not light up on entry yet (section 7); line of sight is used everywhere.
 - The gold amounts (8 piles of 5 to 25) are placeholders until the economy is designed.
 
 ### Running it
@@ -303,15 +346,17 @@ the real database and are skipped unless `ROGUE_DB_PASSWORD` is set; they only c
 | `GET /api/runs/{id}` | The run as it stands, including `remembered`: every block seen so far. |
 | `POST /api/runs/{id}/turns` with `{"turn": 3, "action": "NORTH"}` | Plays one turn. Actions: `NORTH`, `SOUTH`, `EAST`, `WEST`, and `LEAVE` (only on the exit). |
 
-Every response has `runId`, `turn`, `status` (`ACTIVE` or `LEFT`), `gold` (carried), `player`,
-`onExit`, `visible` (tiles in sight now) and `messages`. A tile is `{row, col, terrain}` with `terrain`
+Every response has `runId`, `turn`, `status` (`ACTIVE`, `LEFT` or `DIED`), `gold` (carried),
+`player`, `health`, `stats` (`level`, `power`, `defense`, `maxHealth`), `onExit`, `visible`
+(tiles in sight now), `monsters` (in sight now: `row`, `col`, `kind`, `health`, `maxHealth`) and
+`messages`. A tile is `{row, col, terrain}` with `terrain`
 `#` wall, `.` floor or `>` exit, plus `gold` when there is some. A wrong turn number gets
 `409` with `currentTurn`; an unknown run gets `404`.
 
 | Request | Does |
 |---|---|
 | `POST /api/users` with `{"username": "laura", "email": "..."}` | Creates a user. `400` for a bad username, `409` if the username or email is taken. |
-| `GET /api/users/{username}` | `{userId, username, joined}`, never the email. `404` if there is none. |
+| `GET /api/users/{username}` | `{userId, username, joined, level, power, defense, maxHealth}`, never the email. `404` if there is none. |
 
 There is no sign-in yet, so anyone can create a user. This is for development.
 
@@ -320,8 +365,9 @@ There is no sign-in yet, so anyone can create a user. This is for development.
 ```
 backend/src/main/java/com/roguesocial/
 ├── maze/      Wilson's algorithm, copied from Letter Maze
-├── dungeon/   Floor, FloorGenerator, LineOfSight, Run, RunService, RunStore, Bank
-├── user/      User, UserRepository, UserBank (SQL via JdbcClient), UserController
+├── dungeon/   Floor, FloorGenerator, RoomCarver, LineOfSight, Run, RunService, RunStore, Bank,
+│              Monster, MonsterType, MonsterTurns, Combat, PlayerStats
+├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), UserController
 └── web/       REST API, and serves the React app at /play
 db/
 ├── schema.sql     The whole current database, for a new empty database

@@ -14,7 +14,18 @@ const COLORS = {
   exit: '#e8c547',
   // Laid over blocks the player remembers but cannot see right now.
   memory: 'rgba(11, 11, 16, 0.6)',
+  healthBack: '#3b0d12',
+  health: '#e5484d',
 };
+
+/** A small health bar along the bottom of a block. */
+function drawHealth(ctx, x, y, health, max) {
+  const w = BLOCK - 8;
+  ctx.fillStyle = COLORS.healthBack;
+  ctx.fillRect(x + 4, y + BLOCK - 6, w, 4);
+  ctx.fillStyle = COLORS.health;
+  ctx.fillRect(x + 4, y + BLOCK - 6, Math.round((w * health) / max), 4);
+}
 
 export default function PlayArea({ state, sprites }) {
   const canvasRef = useRef(null);
@@ -55,6 +66,18 @@ export default function PlayArea({ state, sprites }) {
           ctx.fillRect(x, y, BLOCK, BLOCK);
         }
       }
+    }
+
+    for (const m of state.monsters) {
+      const x = (m.col - left) * BLOCK;
+      const y = (m.row - top) * BLOCK;
+      if (sprites) {
+        drawSprite(ctx, sprites, m.kind, x + 2, y + 2, BLOCK - 4);
+      } else {
+        ctx.fillStyle = '#e5484d';
+        ctx.fillRect(x + 8, y + 8, BLOCK - 16, BLOCK - 16);
+      }
+      drawHealth(ctx, x, y, m.health, m.maxHealth);
     }
 
     const px = Math.floor(VIEW_COLS / 2) * BLOCK;

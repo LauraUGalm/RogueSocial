@@ -33,5 +33,17 @@ class FloorGeneratorTest {
         assertThat(floor.goldAt(floor.exit())).isZero();
         assertThat(floor.isWall(floor.entrance())).isFalse();
         assertThat(floor.isWall(floor.exit())).isFalse();
+
+        assertThat(floor.monsters()).hasSize(FloorGenerator.BATS + FloorGenerator.SCORPIONS);
+        assertThat(floor.monsters()).filteredOn(m -> m.type() == MonsterType.SCORPION)
+                .hasSize(FloorGenerator.SCORPIONS);
+        for (Monster m : floor.monsters()) {
+            assertThat(floor.isWall(m.pos())).isFalse();
+            assertThat(floor.goldAt(m.pos())).isZero();
+            int steps = Math.abs(m.pos().row() - floor.entrance().row())
+                    + Math.abs(m.pos().col() - floor.entrance().col());
+            assertThat(steps).isGreaterThanOrEqualTo(FloorGenerator.MONSTER_MIN_DISTANCE);
+        }
+        assertThat(floor.monsters()).extracting(Monster::pos).doesNotHaveDuplicates();
     }
 }

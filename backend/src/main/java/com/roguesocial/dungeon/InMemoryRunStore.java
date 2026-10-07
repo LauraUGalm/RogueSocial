@@ -1,8 +1,10 @@
 package com.roguesocial.dungeon;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Component;
 
@@ -10,7 +12,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class InMemoryRunStore implements RunStore {
 
-    private final Map<String, Run> runs = new ConcurrentHashMap<>();
+    // Kept in the order they were last saved, oldest first.
+    private final Map<String, Run> runs = Collections.synchronizedMap(new LinkedHashMap<>());
 
     @Override
     public Optional<Run> find(String id) {
@@ -19,6 +22,16 @@ public class InMemoryRunStore implements RunStore {
 
     @Override
     public void save(Run run) {
-        runs.put(run.id(), run);
+        synchronized (runs) {
+            runs.remove(run.id());
+            runs.put(run.id(), run);
+        }
+    }
+
+    @Override
+    public List<Run> all() {
+        synchronized (runs) {
+            return runs.values().stream().toList().reversed();
+        }
     }
 }

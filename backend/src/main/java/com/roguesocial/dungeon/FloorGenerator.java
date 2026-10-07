@@ -13,8 +13,8 @@ import com.roguesocial.maze.Maze;
 import com.roguesocial.maze.WilsonMazeGenerator;
 
 /**
- * Builds a floor from a Wilson maze: entrance in the top-left cell, exit in the bottom-right,
- * gold piles scattered in between. Rooms and corridors come later (README section 6).
+ * Builds a floor from a Wilson maze with a few rooms cleared out of it: entrance in the top-left
+ * cell, exit in the bottom-right, gold piles and monsters scattered in between.
  */
 @Component
 public class FloorGenerator {
@@ -27,6 +27,12 @@ public class FloorGenerator {
     static final int GOLD_PILES = 8;
     static final int GOLD_MIN = 5;
     static final int GOLD_MAX = 25;
+
+    // Placeholder numbers until levels are designed (README section 6).
+    static final int BATS = 4;
+    static final int SCORPIONS = 2;
+    /** Monsters start at least this many steps (ignoring walls) from the entrance. */
+    static final int MONSTER_MIN_DISTANCE = 12;
 
     private final WilsonMazeGenerator mazes;
 
@@ -42,6 +48,7 @@ public class FloorGenerator {
                 walls[r][c] = maze.isWall(r, c);
             }
         }
+        RoomCarver.carve(walls, CELL_COLS, CELL_ROWS, random);
 
         Pos entrance = cellToBlock(0, 0);
         Pos exit = cellToBlock(CELL_COLS - 1, CELL_ROWS - 1);
@@ -61,7 +68,16 @@ public class FloorGenerator {
         for (Pos p : spots.subList(0, GOLD_PILES)) {
             gold.put(p, GOLD_MIN + random.nextInt(GOLD_MAX - GOLD_MIN + 1));
         }
-        return new Floor(walls, entrance, exit, gold);
+
+        List<Monster> monsters = new ArrayList<>();
+        List<Pos> lairs = spots.subList(GOLD_PILES, spots.size()).stream()
+                .filter(p -> Math.abs(p.row() - entrance.row()) + Math.abs(p.col() - entrance.col())
+                        >= MONSTER_MIN_DISTANCE)
+                .toList();
+        for (int i = 0; i < BATS + SCORPIONS && i < lairs.size(); i++) {
+            monsters.add(new Monster(i < BATS ? MonsterType.BAT : MonsterType.SCORPION, lairs.get(i)));
+        }
+        return new Floor(walls, entrance, exit, gold, monsters);
     }
 
     private static Pos cellToBlock(int cx, int cy) {

@@ -4,6 +4,7 @@
   --muted: #9b96a8;
   --accent: #c58cff;
   --gold: #e8c547;
+  --health: #e5484d;
   --error: #ff6b6b;
 }
 
@@ -29,9 +30,38 @@ h1 {
 
 .status {
   display: flex;
-  gap: 24px;
-  color: var(--gold);
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
   font-variant-numeric: tabular-nums;
+}
+
+.status.gold {
+  color: var(--gold);
+}
+
+.health {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--health);
+  font-weight: bold;
+}
+
+.health-bar {
+  display: inline-block;
+  width: 100px;
+  height: 10px;
+  border-radius: 5px;
+  background: #3b0d12;
+  overflow: hidden;
+}
+
+.health-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--health);
+  transition: width 0.15s;
 }
 
 .play-area {
@@ -65,4 +95,24 @@ button {
   background: transparent;
   color: var(--accent);
   cursor: pointer;
+}
+
+button.quiet {
+  font-size: 0.9rem;
+  padding: 4px 12px;
+  border-color: #3a3546;
+  color: var(--muted);
+}
+
+/* Invisible but clickable: the bottom-right corner of the page. */
+.invisible-copy {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: default;
 }

@@ -42,6 +42,10 @@ class UserRepositoryTest {
 
         assertThat(created.userId()).isPositive();
         assertThat(created.createdAt()).isNotNull();
+        assertThat(created.level()).isEqualTo(1);
+        assertThat(created.power()).isEqualTo(5);
+        assertThat(created.defense()).isEqualTo(5);
+        assertThat(created.maxHealth()).isEqualTo(20);
         assertThat(users.findById(created.userId())).contains(created);
         assertThat(users.findByUsername(name.toUpperCase())).contains(created);
     }

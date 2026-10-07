@@ -1,6 +1,8 @@
 package com.roguesocial.dungeon;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -12,23 +14,31 @@ public final class Run {
     public enum Status {
         ACTIVE,
         /** Left through the exit; the gold carried went to the bank. */
-        LEFT
+        LEFT,
+        /** Killed. The gold carried is lost. */
+        DIED
     }
 
     private final String id;
     private final String owner;
     private final Floor floor;
+    private final PlayerStats.Stats stats;
     private final Set<Pos> seen = new HashSet<>();
+    private final List<TurnRecord> history = new ArrayList<>();
     private Pos player;
     private int turn;
     private int carriedGold;
+    private int health;
     private Status status = Status.ACTIVE;
 
-    public Run(String id, String owner, Floor floor) {
+    /** {@code stats} are the player's as the run starts; the run begins at full health. */
+    public Run(String id, String owner, PlayerStats.Stats stats, Floor floor) {
         this.id = id;
         this.owner = owner;
+        this.stats = stats;
         this.floor = floor;
         this.player = floor.entrance();
+        this.health = stats.maxHealth();
     }
 
     public String id() {
@@ -42,6 +52,14 @@ public final class Run {
 
     public Floor floor() {
         return floor;
+    }
+
+    public PlayerStats.Stats stats() {
+        return stats;
+    }
+
+    public int health() {
+        return health;
     }
 
     public Pos player() {
@@ -67,6 +85,15 @@ public final class Run {
         return seen;
     }
 
+    /** Every request made to this run, oldest first. For debugging. */
+    public List<TurnRecord> history() {
+        return history;
+    }
+
+    void record(TurnRecord entry) {
+        history.add(entry);
+    }
+
     void moveTo(Pos p) {
         player = p;
     }
@@ -81,6 +108,14 @@ public final class Run {
 
     void leave() {
         status = Status.LEFT;
+    }
+
+    void hurt(int damage) {
+        health = Math.max(0, health - damage);
+    }
+
+    void die() {
+        status = Status.DIED;
     }
 
     void see(Set<Pos> blocks) {

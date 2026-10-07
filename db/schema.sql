@@ -20,7 +20,13 @@ CREATE TABLE public.users (
     created_at timestamptz  NOT NULL DEFAULT now(),
     -- The bank (README section 3). Gold is credited when the player leaves the dungeon alive.
     bank_gold   bigint NOT NULL DEFAULT 0 CONSTRAINT users_bank_gold_nonneg CHECK (bank_gold >= 0),
-    bank_silver bigint NOT NULL DEFAULT 0 CONSTRAINT users_bank_silver_nonneg CHECK (bank_silver >= 0)
+    bank_silver bigint NOT NULL DEFAULT 0 CONSTRAINT users_bank_silver_nonneg CHECK (bank_silver >= 0),
+    -- Combat stats. Everyone starts at level 1 with 5 power, 5 defense and 20 health.
+    level   integer NOT NULL DEFAULT 1 CONSTRAINT users_level_min   CHECK (level >= 1),
+    power   integer NOT NULL DEFAULT 5 CONSTRAINT users_power_min   CHECK (power >= 0),
+    defense integer NOT NULL DEFAULT 5 CONSTRAINT users_defense_min CHECK (defense >= 0),
+    -- The most health the player can have. A run starts with this much.
+    max_health integer NOT NULL DEFAULT 20 CONSTRAINT users_max_health_min CHECK (max_health >= 1)
 );
 
 -- A username or email is taken regardless of case ("Laura" == "laura"). The original

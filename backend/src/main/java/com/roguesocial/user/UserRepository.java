@@ -19,7 +19,13 @@ public class UserRepository {
             rs.getLong("user_id"),
             rs.getString("username"),
             rs.getString("email"),
-            rs.getObject("created_at", java.time.OffsetDateTime.class));
+            rs.getObject("created_at", java.time.OffsetDateTime.class),
+            rs.getInt("level"),
+            rs.getInt("power"),
+            rs.getInt("defense"),
+            rs.getInt("max_health"));
+
+    private static final String COLUMNS = "user_id, username, email, created_at, level, power, defense, max_health";
 
     private final JdbcClient db;
 
@@ -36,9 +42,8 @@ public class UserRepository {
             throw new IllegalArgumentException("That doesn't look like an email address");
         }
         try {
-            return db.sql("""
-                    INSERT INTO users (username, email) VALUES (:username, :email)
-                    RETURNING user_id, username, email, created_at""")
+            return db.sql("INSERT INTO users (username, email) VALUES (:username, :email) RETURNING "
+                    + COLUMNS)
                     .param("username", username)
                     .param("email", email.trim())
                     .query(ROW)
@@ -49,7 +54,7 @@ public class UserRepository {
     }
 
     public Optional<User> findById(long userId) {
-        return db.sql("SELECT user_id, username, email, created_at FROM users WHERE user_id = :id")
+        return db.sql("SELECT " + COLUMNS + " FROM users WHERE user_id = :id")
                 .param("id", userId)
                 .query(ROW)
                 .optional();
@@ -57,9 +62,7 @@ public class UserRepository {
 
     /** Ignores case, matching the unique index. */
     public Optional<User> findByUsername(String username) {
-        return db.sql("""
-                SELECT user_id, username, email, created_at FROM users
-                WHERE lower(username) = lower(:username)""")
+        return db.sql("SELECT " + COLUMNS + " FROM users WHERE lower(username) = lower(:username)")
                 .param("username", username)
                 .query(ROW)
                 .optional();
