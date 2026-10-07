@@ -1,0 +1,110 @@
+{
+  "tileSize": 64,
+  "image": "spritesheet.png",
+  "sprites": {
+    "rat": {
+      "col": 0,
+      "row": 0
+    },
+    "rat_elite": {
+      "col": 0,
+      "row": 1
+    },
+    "bat": {
+      "col": 1,
+      "row": 0
+    },
+    "bat_elite": {
+      "col": 1,
+      "row": 1
+    },
+    "spider": {
+      "col": 2,
+      "row": 0
+    },
+    "spider_elite": {
+      "col": 2,
+      "row": 1
+    },
+    "scorpion": {
+      "col": 3,
+      "row": 0
+    },
+    "scorpion_elite": {
+      "col": 3,
+      "row": 1
+    },
+    "snake": {
+      "col": 4,
+      "row": 0
+    },
+    "snake_elite": {
+      "col": 4,
+      "row": 1
+    },
+    "wolf": {
+      "col": 5,
+      "row": 0
+    },
+    "wolf_elite": {
+      "col": 5,
+      "row": 1
+    },
+    "skeleton": {
+      "col": 6,
+      "row": 0
+    },
+    "skeleton_elite": {
+      "col": 6,
+      "row": 1
+    },
+    "ghost": {
+      "col": 7,
+      "row": 0
+    },
+    "ghost_elite": {
+      "col": 7,
+      "row": 1
+    },
+    "ogre": {
+      "col": 8,
+      "row": 0
+    },
+    "ogre_elite": {
+      "col": 8,
+      "row": 1
+    },
+    "troll": {
+      "col": 9,
+      "row": 0
+    },
+    "troll_elite": {
+      "col": 9,
+      "row": 1
+    },
+    "dragon": {
+      "col": 10,
+      "row": 0
+    },
+    "dragon_elite": {
+      "col": 10,
+      "row": 1
+    },
+    "chest": {
+      "col": 11,
+      "row": 0
+    },
+    "gold": {
+      "col": 12,
+      "row": 0
+    },
+    "tombstone": {
+      "col": 13,
+      "row": 0
+    },
+    "player": {
+      "col": 14,
+      "row": 0
+    }
+  }
+}

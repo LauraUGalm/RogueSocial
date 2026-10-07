@@ -40,8 +40,8 @@ directly sets how much a player can say.
 - **Decided**: Items left in the bank cannot be used while in the dungeon.
 - **Proposed**: Only banked gold can pay for posts, so treasure has to make it out of the dungeon
   before it becomes words.
-- **Open**: When a player can bank. Either only by leaving the dungeon alive (high tension), or
-  at checkpoints such as a safe room every few floors (more forgiving).
+- **Decided**: A player can bank only by leaving the dungeon alive. There are no checkpoints;
+  everything carried stays at risk until they get out.
 
 ## 4. Death and recovery
 
@@ -58,8 +58,8 @@ directly sets how much a player can say.
 - **Proposed**: Dying during a recovery run replaces the old dropped pile with whatever the player
   was carrying this time.
 - **Proposed**: A death floor is kept for one week, or until the player starts a new dungeon.
-- **Open**: Where the player re-enters a death floor. If they can start anywhere, they could start
-  beside the tombstone and skip the fight. Starting at the floor's original entrance avoids that.
+- **Decided**: The player re-enters a death floor at its original entrance, so they have to fight
+  their way back to the tombstone. This is an exception to choosing a start position (section 6).
 
 ## 5. Pause
 
@@ -79,7 +79,8 @@ directly sets how much a player can say.
   monsters and more of them.
 - **Decided**: The player picks the difficulty tier of the floor they enter, up to their level.
   Someone short on time can choose a smaller floor.
-- **Decided**: The player can start a floor at any position that is not inside a wall.
+- **Decided**: The player can start a floor at any position that is not inside a wall. Death
+  floors are the exception: they always start at the original entrance (section 4).
 - **Proposed**: Start positions keep a minimum distance from monsters and from the exit, and the
   start must always be able to reach the exit.
 - **Proposed**: A death floor keeps the tier it was generated at.
@@ -111,9 +112,9 @@ directly sets how much a player can say.
   out of view.
 - **Open**: How the map scales on large floors: shrink to fit everything explored, or keep a fixed
   scale and scroll with the player.
-- **Open**: What counts as seeing. Options: a fixed radius around the player, true line of sight
-  (blocked by walls), or Rogue-style (a whole room lights up on entry, corridors one step at a
-  time). Suggested: line of sight on the current maze, Rogue-style once rooms exist.
+- **Decided**: What counts as seeing: true line of sight (blocked by walls) on the current maze,
+  then Rogue-style (a whole room lights up on entry, corridors one step at a time) once the
+  generator makes rooms.
 - **Open**: What spells cost: a magic pool that refills, scrolls bought with silver, or a cooldown
   counted in turns.
 
@@ -131,9 +132,13 @@ directly sets how much a player can say.
 
 ## 9. Storage
 
-- **Decided**: Everything lives in DynamoDB: the game and the social side. There is no relational
-  database. Part of the purpose of this project is hands-on NoSQL experience beyond storing
-  sessions and settings, and follows, likes, and feeds are where that experience comes from.
+- **Decided** (changed 2026-10-06): Data lives in PostgreSQL, laid out like the Stonks project:
+  `db/schema.sql` holds the current shape and `db/migrations/` holds numbered change scripts.
+  This replaces the earlier decision to keep everything in DynamoDB. The items below that were
+  written with DynamoDB in mind (automatic expiry, one item per player, secondary indexes, the
+  400 KB limit) need revisiting for Postgres.
+- **Decided**: A `users` table holds one row per player: ID, username, email, and when they
+  joined. Usernames and emails are unique ignoring case.
 - **Decided**: Saved floors go in the database so they survive a player walking away for a day or
   two.
 - **Decided**: Store the whole floor, not just the random seed that generated it.
@@ -178,7 +183,7 @@ taller is about 11 KB, far below DynamoDB's 400 KB limit per item.
 - **Open**: The spider is hard to see on a dark floor. Options are a lighter floor or a pale
   outline around sprites.
 
-A first sheet with this cast is in the RougeSocial repository: `spritesheet.png`, its index
+A first sheet with this cast is in the RogueSocial repository: `spritesheet.png`, its index
 `sprites.json`, and the script `make_sheet.py` with its list `cast.json`.
 
 Sprites are derived from [Google's Noto Emoji](https://github.com/googlefonts/noto-emoji), licensed
@@ -209,8 +214,114 @@ a React frontend.
 
 **Needs to change**
 
-- The server sends the whole maze at once and then forgets it. It has to keep the floor and reveal
-  it turn by turn.
-- The browser decides what was collected. The server has to decide.
+- ~~The server sends the whole maze at once and then forgets it. It has to keep the floor and reveal
+  it turn by turn.~~ Done: see "The code so far" below.
+- ~~The browser decides what was collected. The server has to decide.~~ Done.
 - There are no accounts, no database, and no monsters.
 - The generator makes a pure maze, not rooms and corridors.
+
+Letter Maze itself is left untouched. The pieces that carried over were copied into this repository.
+
+---
+
+## The code so far
+
+A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
+
+**What works**
+
+- The server keeps the whole floor and runs every turn. The browser sends only a turn number and
+  an action (`NORTH`, `SOUTH`, `EAST`, `WEST`) and never a position.
+- Line of sight: the player sees every block within 6 that a straight line reaches without
+  crossing a wall. What they have seen stays on screen, dimmed.
+- Gold is granted by the server when the player steps onto it.
+- Each turn must carry the current turn number. A replayed or out-of-order turn is rejected.
+  Walking into a wall does not use a turn.
+- Positions sent to the browser are relative to the entrance.
+- Reaching the exit (`>`) ends the run. Banking is not built yet, so the gold is only reported.
+- Closing the tab and coming back resumes the run, with the map so far.
+
+**Not built yet**
+
+- Runs are kept in memory (behind `RunStore`) and lost when the server restarts. They are not
+  in Postgres yet.
+- There is a `users` table and an API to create and look up users, but no sign-in, and runs are
+  not tied to users: the browser remembers its run ID in local storage.
+- No monsters, combat, death, banking, levels, the overview map, or the rate limit.
+- The player always starts at the entrance; choosing a start position is not built.
+- The gold amounts (8 piles of 5 to 25) are placeholders until the economy is designed.
+
+### Running it
+
+You need **Java 21**, **Maven 3.6+**, **Node 18+** and **PostgreSQL**.
+
+Create the database once, then point the server at it:
+
+```bash
+createdb -h localhost -U postgres rogue_social
+psql -h localhost -U postgres -d rogue_social -f db/schema.sql
+
+export ROGUE_DB_PASSWORD='...'   # required; nothing is stored in the repo
+# Optional: ROGUE_DB_URL (default jdbc:postgresql://localhost:5432/rogue_social)
+#           ROGUE_DB_USER (default postgres)
+```
+
+The game itself runs without the database; only the `/api/users` calls need it.
+
+```bash
+cd frontend
+npm install
+npm run build        # builds into the backend's static folder
+
+cd ../backend
+mvn spring-boot:run
+```
+
+Then open **http://localhost:8081/play**. The port is 8081 because the Stonks app uses 8080.
+
+For frontend work, leave the server running and run `npm run watch` in `frontend/`, then refresh
+the browser after saving. Backend tests: `mvn test` in `backend/`. The user tests run against
+the real database and are skipped unless `ROGUE_DB_PASSWORD` is set; they only create users named
+`zztest_...` and delete them afterwards.
+
+### API
+
+| Request | Does |
+|---|---|
+| `POST /api/runs` | Starts a run on a new floor. |
+| `GET /api/runs/{id}` | The run as it stands, including `remembered`: every block seen so far. |
+| `POST /api/runs/{id}/turns` with `{"turn": 3, "action": "NORTH"}` | Plays one turn. |
+
+Every response has `runId`, `turn`, `status` (`ACTIVE` or `ESCAPED`), `gold` (carried), `player`,
+`visible` (tiles in sight now) and `messages`. A tile is `{row, col, terrain}` with `terrain`
+`#` wall, `.` floor or `>` exit, plus `gold` when there is some. A wrong turn number gets
+`409` with `currentTurn`; an unknown run gets `404`.
+
+| Request | Does |
+|---|---|
+| `POST /api/users` with `{"username": "laura", "email": "..."}` | Creates a user. `400` for a bad username, `409` if the username or email is taken. |
+| `GET /api/users/{username}` | `{userId, username, joined}`, never the email. `404` if there is none. |
+
+There is no sign-in yet, so anyone can create a user. This is for development.
+
+### Layout
+
+```
+backend/src/main/java/com/roguesocial/
+├── maze/      Wilson's algorithm, copied from Letter Maze
+├── dungeon/   Floor, FloorGenerator, LineOfSight, Run, RunService, RunStore
+├── user/      User, UserRepository (SQL via JdbcClient), UserController
+└── web/       REST API, and serves the React app at /play
+db/
+├── schema.sql     The whole current database, for a new empty database
+└── migrations/    Numbered change scripts for an existing database (none yet)
+frontend/src/
+├── App.jsx       Status line, arrow keys, message log
+├── PlayArea.jsx  Draws the view around the player from the sprite sheet
+├── run.js        Builds up the player's map from what the server reveals
+├── api.js        Calls to the server
+└── sprites.js    Loads spritesheet.png and sprites.json
+```
+
+`frontend/public/sprites/` holds copies of `spritesheet.png` and `sprites.json`. Copy them again
+after re-running `make_sheet.py`.
