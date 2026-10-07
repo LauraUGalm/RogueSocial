@@ -42,6 +42,8 @@ directly sets how much a player can say.
   before it becomes words.
 - **Decided**: A player can bank only by leaving the dungeon alive. There are no checkpoints;
   everything carried stays at risk until they get out.
+- **Decided**: Reaching the exit does not end the run by itself. Standing on the exit, the player
+  chooses to leave, which banks the gold they carry; or they keep exploring.
 
 ## 4. Death and recovery
 
@@ -238,15 +240,20 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - Each turn must carry the current turn number. A replayed or out-of-order turn is rejected.
   Walking into a wall does not use a turn.
 - Positions sent to the browser are relative to the entrance.
-- Reaching the exit (`>`) ends the run. Banking is not built yet, so the gold is only reported.
+- Standing on the exit (`>`), the player can leave (`L` or the button). That adds the gold they
+  carry to their bank in Postgres and ends the run. The bank is credited before the run ends,
+  so if the database is down the run simply carries on.
+- There is no sign-in, so every run belongs to one hard-coded player, `rogue.player=laura` in
+  `application.properties`, created by `db/seed.sql`.
 - Closing the tab and coming back resumes the run, with the map so far.
 
 **Not built yet**
 
 - Runs are kept in memory (behind `RunStore`) and lost when the server restarts. They are not
   in Postgres yet.
-- There is a `users` table and an API to create and look up users, but no sign-in, and runs are
-  not tied to users: the browser remembers its run ID in local storage.
+- There is a `users` table and an API to create and look up users, but no sign-in. The browser
+  remembers its run ID in local storage.
+- Silver, and spending banked gold on posts, are not built.
 - No monsters, combat, death, banking, levels, the overview map, or the rate limit.
 - The player always starts at the entrance; choosing a start position is not built.
 - The gold amounts (8 piles of 5 to 25) are placeholders until the economy is designed.
@@ -260,13 +267,17 @@ Create the database once, then point the server at it:
 ```bash
 createdb -h localhost -U postgres rogue_social
 psql -h localhost -U postgres -d rogue_social -f db/schema.sql
+psql -h localhost -U postgres -d rogue_social -f db/seed.sql     # the player, laura
 
 export ROGUE_DB_PASSWORD='...'   # required; nothing is stored in the repo
 # Optional: ROGUE_DB_URL (default jdbc:postgresql://localhost:5432/rogue_social)
 #           ROGUE_DB_USER (default postgres)
 ```
 
-The game itself runs without the database; only the `/api/users` calls need it.
+Run these from the repository folder. On a database made before a change, apply the scripts in
+`db/migrations/` in order instead of `schema.sql`.
+
+The game runs without the database until you leave the dungeon; banking and `/api/users` need it.
 
 ```bash
 cd frontend
@@ -290,10 +301,10 @@ the real database and are skipped unless `ROGUE_DB_PASSWORD` is set; they only c
 |---|---|
 | `POST /api/runs` | Starts a run on a new floor. |
 | `GET /api/runs/{id}` | The run as it stands, including `remembered`: every block seen so far. |
-| `POST /api/runs/{id}/turns` with `{"turn": 3, "action": "NORTH"}` | Plays one turn. |
+| `POST /api/runs/{id}/turns` with `{"turn": 3, "action": "NORTH"}` | Plays one turn. Actions: `NORTH`, `SOUTH`, `EAST`, `WEST`, and `LEAVE` (only on the exit). |
 
-Every response has `runId`, `turn`, `status` (`ACTIVE` or `ESCAPED`), `gold` (carried), `player`,
-`visible` (tiles in sight now) and `messages`. A tile is `{row, col, terrain}` with `terrain`
+Every response has `runId`, `turn`, `status` (`ACTIVE` or `LEFT`), `gold` (carried), `player`,
+`onExit`, `visible` (tiles in sight now) and `messages`. A tile is `{row, col, terrain}` with `terrain`
 `#` wall, `.` floor or `>` exit, plus `gold` when there is some. A wrong turn number gets
 `409` with `currentTurn`; an unknown run gets `404`.
 
@@ -309,12 +320,13 @@ There is no sign-in yet, so anyone can create a user. This is for development.
 ```
 backend/src/main/java/com/roguesocial/
 ├── maze/      Wilson's algorithm, copied from Letter Maze
-├── dungeon/   Floor, FloorGenerator, LineOfSight, Run, RunService, RunStore
-├── user/      User, UserRepository (SQL via JdbcClient), UserController
+├── dungeon/   Floor, FloorGenerator, LineOfSight, Run, RunService, RunStore, Bank
+├── user/      User, UserRepository, UserBank (SQL via JdbcClient), UserController
 └── web/       REST API, and serves the React app at /play
 db/
 ├── schema.sql     The whole current database, for a new empty database
-└── migrations/    Numbered change scripts for an existing database (none yet)
+├── seed.sql       The one player until there is sign-in
+└── migrations/    Numbered change scripts for an existing database
 frontend/src/
 ├── App.jsx       Status line, arrow keys, message log
 ├── PlayArea.jsx  Draws the view around the player from the sprite sheet

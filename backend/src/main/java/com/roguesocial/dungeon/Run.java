@@ -9,9 +9,14 @@ import java.util.Set;
  */
 public final class Run {
 
-    public enum Status { ACTIVE, ESCAPED }
+    public enum Status {
+        ACTIVE,
+        /** Left through the exit; the gold carried went to the bank. */
+        LEFT
+    }
 
     private final String id;
+    private final String owner;
     private final Floor floor;
     private final Set<Pos> seen = new HashSet<>();
     private Pos player;
@@ -19,14 +24,20 @@ public final class Run {
     private int carriedGold;
     private Status status = Status.ACTIVE;
 
-    public Run(String id, Floor floor) {
+    public Run(String id, String owner, Floor floor) {
         this.id = id;
+        this.owner = owner;
         this.floor = floor;
         this.player = floor.entrance();
     }
 
     public String id() {
         return id;
+    }
+
+    /** The username of the player whose run this is. */
+    public String owner() {
+        return owner;
     }
 
     public Floor floor() {
@@ -68,8 +79,8 @@ public final class Run {
         turn++;
     }
 
-    void escape() {
-        status = Status.ESCAPED;
+    void leave() {
+        status = Status.LEFT;
     }
 
     void see(Set<Pos> blocks) {

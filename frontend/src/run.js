@@ -24,6 +24,7 @@ export function applyView(state, view, fresh) {
     status: view.status,
     gold: view.gold,
     player: view.player,
+    onExit: view.onExit,
     known,
     visible: new Set(view.visible.map((t) => key(t.row, t.col))),
     log: view.messages.length ? [...log, ...view.messages].slice(-4) : log,

@@ -8,7 +8,9 @@ public enum Action {
     NORTH(-1, 0),
     SOUTH(1, 0),
     WEST(0, -1),
-    EAST(0, 1);
+    EAST(0, 1),
+    /** Leave the dungeon and bank the gold carried. Only works standing on the exit. */
+    LEAVE(0, 0);
 
     private final int dRow;
     private final int dCol;

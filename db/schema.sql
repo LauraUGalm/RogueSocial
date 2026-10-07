@@ -17,7 +17,10 @@ CREATE TABLE public.users (
     username   varchar(32)  NOT NULL
         CONSTRAINT users_username_format CHECK (username ~ '^[A-Za-z0-9_]{3,32}$'),
     email      varchar(254) NOT NULL,
-    created_at timestamptz  NOT NULL DEFAULT now()
+    created_at timestamptz  NOT NULL DEFAULT now(),
+    -- The bank (README section 3). Gold is credited when the player leaves the dungeon alive.
+    bank_gold   bigint NOT NULL DEFAULT 0 CONSTRAINT users_bank_gold_nonneg CHECK (bank_gold >= 0),
+    bank_silver bigint NOT NULL DEFAULT 0 CONSTRAINT users_bank_silver_nonneg CHECK (bank_silver >= 0)
 );
 
 -- A username or email is taken regardless of case ("Laura" == "laura"). The original

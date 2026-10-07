@@ -8,6 +8,7 @@ import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.roguesocial.dungeon.RunView.Tile;
@@ -20,16 +21,22 @@ public class RunService {
 
     private final FloorGenerator floors;
     private final RunStore store;
+    private final Bank bank;
     private final Random random;
+    // Until there is sign-in, every run belongs to this one player.
+    private final String player;
 
-    public RunService(FloorGenerator floors, RunStore store, Random random) {
+    public RunService(FloorGenerator floors, RunStore store, Bank bank, Random random,
+            @Value("${rogue.player}") String player) {
         this.floors = floors;
         this.store = store;
+        this.bank = bank;
         this.random = random;
+        this.player = player;
     }
 
     public RunView start() {
-        Run run = new Run(UUID.randomUUID().toString(), floors.generate(random));
+        Run run = new Run(UUID.randomUUID().toString(), player, floors.generate(random));
         run.see(LineOfSight.visible(run.floor(), run.player()));
         store.save(run);
         return view(run, true, List.of());
@@ -45,8 +52,8 @@ public class RunService {
 
     /**
      * Plays one turn. {@code turn} must match the run's current turn, so a replayed or
-     * out-of-order request is rejected rather than applied twice. Walking into a wall does not
-     * use up a turn.
+     * out-of-order request is rejected rather than applied twice. Walking into a wall, or trying
+     * to leave anywhere but the exit, does not use up a turn.
      */
     public RunView act(String runId, int turn, Action action) {
         Run run = find(runId);
@@ -59,8 +66,12 @@ public class RunService {
             }
 
             Floor floor = run.floor();
-            Pos next = run.player().step(action);
             List<String> messages = new ArrayList<>();
+            if (action == Action.LEAVE) {
+                return leave(run, messages);
+            }
+
+            Pos next = run.player().step(action);
             if (floor.isWall(next)) {
                 return view(run, false, messages);
             }
@@ -72,14 +83,31 @@ public class RunService {
                 messages.add("You pick up " + gold + " gold.");
             }
             if (next.equals(floor.exit())) {
-                run.escape();
-                messages.add("You escape with " + run.carriedGold() + " gold.");
+                messages.add("You find the way out. Leave now to bank your gold, or keep exploring.");
             }
             run.endTurn();
             run.see(LineOfSight.visible(floor, next));
             store.save(run);
             return view(run, false, messages);
         }
+    }
+
+    /**
+     * Banks the gold carried and ends the run. The bank is credited first: if that fails, the run
+     * carries on as it was, so the gold is never lost or banked twice.
+     */
+    private RunView leave(Run run, List<String> messages) {
+        if (!run.player().equals(run.floor().exit())) {
+            messages.add("There is no way out here.");
+            return view(run, false, messages);
+        }
+        long banked = bank.depositGold(run.owner(), run.carriedGold());
+        run.leave();
+        run.endTurn();
+        store.save(run);
+        messages.add("You leave the dungeon and bank " + run.carriedGold() + " gold. "
+                + "Your bank now holds " + banked + " gold.");
+        return view(run, false, messages);
     }
 
     private Run find(String runId) {
@@ -92,7 +120,8 @@ public class RunService {
         List<Tile> visible = tiles(floor, origin, LineOfSight.visible(floor, run.player()));
         List<Tile> remembered = withMap ? tiles(floor, origin, run.seen()) : null;
         return new RunView(run.id(), run.turn(), run.status(), run.carriedGold(),
-                run.player().minus(origin), visible, remembered, messages);
+                run.player().minus(origin), run.player().equals(floor.exit()),
+                visible, remembered, messages);
     }
 
     private static List<Tile> tiles(Floor floor, Pos origin, Collection<Pos> blocks) {

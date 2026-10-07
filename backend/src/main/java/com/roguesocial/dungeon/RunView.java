@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * What the browser is told after a turn. Positions are relative to the floor's entrance, so the
  * browser never learns the floor's true size or where its edges are.
  *
+ * @param onExit     whether the player is standing on the exit, and so can leave
  * @param visible    blocks the player can see right now
  * @param remembered every block the player has seen on this floor; sent only when resuming a run
  * @param messages   what happened this turn, such as gold picked up
@@ -19,6 +20,7 @@ public record RunView(
         Run.Status status,
         int gold,
         Pos player,
+        boolean onExit,
         List<Tile> visible,
         List<Tile> remembered,
         List<String> messages) {
