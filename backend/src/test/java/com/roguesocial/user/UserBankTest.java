@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import com.roguesocial.social.NotEnoughGoldException;
+
 /** Runs against the real database; see {@link UserRepositoryTest}. */
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "ROGUE_DB_PASSWORD", matches = ".+")
@@ -41,6 +43,19 @@ class UserBankTest {
         assertThat(bank.depositGold(name.toUpperCase().replace("ZZTEST_", "zztest_"), 30))
                 .isEqualTo(42);
         assertThat(bank.depositGold(name, 0)).isEqualTo(42);
+    }
+
+    @Test
+    void spendingNeedsTheGold() {
+        String name = "zztest_" + UUID.randomUUID().toString().substring(0, 8);
+        users.create(name, name + "@example.com");
+        bank.depositGold(name, 30);
+
+        assertThat(bank.spendGold(name, 25)).isEqualTo(5);
+        assertThatThrownBy(() -> bank.spendGold(name, 6))
+                .isInstanceOf(NotEnoughGoldException.class)
+                .hasMessageContaining("you have 5");
+        assertThat(bank.spendGold(name, 5)).isZero();
     }
 
     @Test

@@ -30,8 +30,16 @@ directly sets how much a player can say.
 - **Proposed**: The starting silver is a safety net, given only when a player has no silver and no
   gear anywhere, bank included. Handed out on every death it could be farmed.
 - **Open**: The starting silver amount.
-- **Open**: How characters are counted in edge cases: emoji (count one per visible symbol), links,
-  replies, and edits.
+- **Decided** (2026-10-12): Every visible symbol that is not whitespace costs one gold, and an
+  emoji is one symbol. "Hello World" costs 10 gold, not 11; "👍🏽" costs 1.
+- **Decided** (2026-10-12): Replies cost gold the same way posts do.
+- **Decided** (2026-10-12): Editing a post costs only the symbols it adds: going from 100 to 120
+  costs 20. Making a post shorter refunds nothing.
+- **Proposed** (as built): A post remembers the most gold paid for it, and an edit costs only
+  the symbols past that. A post paid for at 100 can shrink to 80 and grow back to 100 for free.
+- **Open**: Whether an edit that keeps the same length but rewrites the words should cost
+  anything. Counting only the length lets someone replace a whole post for free.
+- **Open**: How links are counted.
 
 ## 3. The bank
 
@@ -230,10 +238,23 @@ A first sheet with this cast is in the RogueSocial repository: `spritesheet.png`
 Sprites are derived from [Google's Noto Emoji](https://github.com/googlefonts/noto-emoji), licensed
 under Apache 2.0.
 
-## 11. Not designed yet
+## 11. The social side
 
-- The social side itself: the feed, following, replies, likes, and what a profile shows. This is
-  next, because the table design depends on it.
+- **Decided** (2026-10-12): The social side (posts, replies, follows, likes) is stored in MongoDB,
+  to learn a document database. Players, gold and stats stay in Postgres. Section 9's DynamoDB
+  items about posts, follows and the feed are replaced by this section.
+- **Decided**: The feed shows posts from the people you follow, newest first.
+- **Decided**: Replies are one level deep: a reply belongs to a post, never to another reply.
+- **Decided**: Likes are free, one per person per post.
+- **Decided**: Posts can be edited (see section 2 for what an edit costs).
+- **Open**: Whether posts can be deleted, and whether that refunds anything.
+- **Proposed**: Gold is in Postgres and posts are in Mongo, so posting cannot be one transaction.
+  The server takes the gold first, then writes the post, and gives the gold back if the write
+  fails.
+
+## 12. Not designed yet
+
+- What a profile shows.
 - Accounts and sign-in.
 - Combat rules, monster types, gear, and item stats.
 - Whether it is intended that experienced players, who earn more gold per run, become the loudest
@@ -288,6 +309,8 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - There is no sign-in, so every run belongs to one hard-coded player, `rogue.player=laura` in
   `application.properties`, created by `db/seed.sql`.
 - Closing the tab and coming back resumes the run, with the map so far.
+- Posts, replies, edits, likes, follows and the feed (section 11), stored in MongoDB. Posting
+  spends banked gold from Postgres, one per visible symbol; an emoji is one.
 
 **Not built yet**
 
@@ -295,7 +318,8 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
   in Postgres yet.
 - There is a `users` table and an API to create and look up users, but no sign-in. The browser
   remembers its run ID in local storage.
-- Silver, and spending banked gold on posts, are not built.
+- Silver is not built.
+- The social side has a server API but no screens yet, and no profile page.
 - Death ends the run and loses the gold carried; the tombstone and recovery runs (section 4) are
   not built. Killing monsters gives nothing yet (no drops, no experience).
 - No levels, gear, healing, the overview map, or the rate limit.
@@ -305,7 +329,12 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 
 ### Running it
 
-You need **Java 21**, **Maven 3.6+**, **Node 18+** and **PostgreSQL**.
+You need **Java 21**, **Maven 3.6+**, **Node 18+**, **PostgreSQL** and **MongoDB 8.2**.
+
+MongoDB 8.0 refuses to start on Ubuntu 24.04's 7.0 kernel (it reads Ubuntu's `7.0.0` version
+number as one of the kernels it can't run on), so install it from the 8.2 repository. Mongo needs no setup:
+the `rogue_social` database, its collections and its indexes are created on first use. The
+default address is `mongodb://localhost:27017/rogue_social`; set `ROGUE_MONGO_URI` to change it.
 
 Create the database once, then point the server at it:
 
@@ -322,7 +351,8 @@ export ROGUE_DB_PASSWORD='...'   # required; nothing is stored in the repo
 Run these from the repository folder. On a database made before a change, apply the scripts in
 `db/migrations/` in order instead of `schema.sql`.
 
-The game runs without the database until you leave the dungeon; banking and `/api/users` need it.
+The game runs without either database until you leave the dungeon; banking and `/api/users`
+need Postgres, and the social API needs both.
 
 ```bash
 cd frontend
@@ -338,7 +368,8 @@ Then open **http://localhost:8081/play**. The port is 8081 because the Stonks ap
 For frontend work, leave the server running and run `npm run watch` in `frontend/`, then refresh
 the browser after saving. Backend tests: `mvn test` in `backend/`. The user tests run against
 the real database and are skipped unless `ROGUE_DB_PASSWORD` is set; they only create users named
-`zztest_...` and delete them afterwards.
+`zztest_...` and delete them afterwards. The social tests use a separate Mongo database,
+`rogue_social_test`, and are skipped when Mongo isn't running.
 
 ### API
 
@@ -362,6 +393,22 @@ Every response has `runId`, `turn`, `status` (`ACTIVE`, `LEFT` or `DIED`), `gold
 
 There is no sign-in yet, so anyone can create a user. This is for development.
 
+The social API acts as `rogue.player`, or as whoever an `X-Rogue-User` header names, so you can
+try the feed with more than one player. That header is also only for development.
+
+| Request | Does |
+|---|---|
+| `POST /api/posts` with `{"text": "...", "replyTo": null}` | Posts, or replies when `replyTo` is a post's `id`. `201` with `{post, goldSpent}`. `402` without the gold, `400` for a blank post or a reply to a reply. |
+| `PATCH /api/posts/{id}` with `{"text": "..."}` | Edits your post, paying for any new symbols. `403` if it isn't yours. |
+| `GET /api/posts/{id}` | One post. |
+| `GET /api/posts/{id}/replies` | Its replies, oldest first (up to 100). |
+| `PUT` / `DELETE /api/posts/{id}/like` | Likes or unlikes; both are safe to repeat. Returns the post. |
+| `PUT` / `DELETE /api/follows/{username}` | Follows or unfollows. `204`. |
+| `GET /api/feed?before={id}` | 20 posts from you and the people you follow, newest first. Pass the last `id` for the next page. |
+
+A post is `{id, authorId, authorName, text, paid, createdAt, editedAt, replyTo, likeCount,
+replyCount}`. `503` means a database is down.
+
 ### Layout
 
 ```
@@ -370,8 +417,10 @@ backend/src/main/java/com/roguesocial/
 ├── dungeon/   Floor, FloorGenerator, RoomCarver, LineOfSight, Run, RunService, RunStore, Bank,
 │              Monster, EnemyType, EnemyCatalog, MonsterTurns, Combat, PlayerStats
 ├── enemy/     EnemyRepository (the enemies table)
+├── social/    Post, Follow, Like (Mongo documents), PostCost, PostService, FollowService,
+│              SocialIndexes, Purse (gold for posts, implemented by UserBank)
 ├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), UserController
-└── web/       REST API, and serves the React app at /play
+└── web/       REST API (runs, debug, social), and serves the React app at /play
 db/
 ├── schema.sql     The whole current database, for a new empty database
 ├── seed.sql       Starting rows: the one player until there is sign-in, and the enemies
