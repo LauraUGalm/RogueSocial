@@ -3,17 +3,17 @@ package com.roguesocial.dungeon;
 /** One monster on a floor: what it is, where it is, and how much health it has left. */
 public final class Monster {
 
-    private final MonsterType type;
+    private final EnemyType type;
     private Pos pos;
     private int health;
 
-    public Monster(MonsterType type, Pos pos) {
+    public Monster(EnemyType type, Pos pos) {
         this.type = type;
         this.pos = pos;
         this.health = type.maxHealth();
     }
 
-    public MonsterType type() {
+    public EnemyType type() {
         return type;
     }
 

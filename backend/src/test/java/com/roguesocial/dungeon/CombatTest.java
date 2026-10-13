@@ -3,8 +3,8 @@ package com.roguesocial.dungeon;
 import static com.roguesocial.dungeon.Action.EAST;
 import static com.roguesocial.dungeon.Action.SOUTH;
 import static com.roguesocial.dungeon.Action.WEST;
-import static com.roguesocial.dungeon.MonsterType.BAT;
-import static com.roguesocial.dungeon.MonsterType.SCORPION;
+import static com.roguesocial.dungeon.TestFloors.BAT;
+import static com.roguesocial.dungeon.TestFloors.SCORPION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -24,8 +24,8 @@ class CombatTest {
 
     @Test
     void damageIsStrengthMinusDefenseButAtLeastOne() {
-        assertThat(Combat.damage(BAT.strength(), 5)).isEqualTo(1);
-        assertThat(Combat.damage(SCORPION.strength(), 5)).isEqualTo(2);
+        assertThat(Combat.damage(BAT.power(), 5)).isEqualTo(1);
+        assertThat(Combat.damage(SCORPION.power(), 5)).isEqualTo(2);
         assertThat(Combat.damage(5, BAT.defense())).isEqualTo(4);
         assertThat(Combat.damage(5, SCORPION.defense())).isEqualTo(2);
         assertThat(Combat.damage(1, 100)).isEqualTo(1);
@@ -33,8 +33,8 @@ class CombatTest {
 
     @Test
     void monsterStats() {
-        assertThat(List.of(BAT.maxHealth(), BAT.strength(), BAT.defense())).containsExactly(3, 2, 1);
-        assertThat(List.of(SCORPION.maxHealth(), SCORPION.strength(), SCORPION.defense()))
+        assertThat(List.of(BAT.maxHealth(), BAT.power(), BAT.defense())).containsExactly(3, 2, 1);
+        assertThat(List.of(SCORPION.maxHealth(), SCORPION.power(), SCORPION.defense()))
                 .containsExactly(10, 7, 3);
     }
 

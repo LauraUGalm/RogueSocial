@@ -67,7 +67,7 @@ public class DebugController {
                 Pos p = new Pos(r, c);
                 var monster = f.monsterAt(p);
                 sb.append(p.equals(run.player()) ? '@'
-                        : monster.isPresent() ? monster.get().type().sprite().charAt(0)
+                        : monster.isPresent() ? monster.get().type().name().charAt(0)
                         : p.equals(f.exit()) ? '>'
                         : f.isWall(p) ? '#'
                         : f.goldAt(p) > 0 ? '$' : '.');

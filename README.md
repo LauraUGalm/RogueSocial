@@ -97,8 +97,7 @@ directly sets how much a player can say.
 
 ### Combat
 
-- **Decided**: An attack does the attacker's strength minus the defender's defense, at least 1.
-  The player's power is their strength.
+- **Decided**: An attack does the attacker's power minus the defender's defense, at least 1.
 - **Decided**: Each turn a coin flip decides whether the player or the monsters act first.
 - **Decided**: A player can be attacked by more than one monster at once: every engaged monster
   attacks on the monsters' half of the turn.
@@ -112,9 +111,12 @@ directly sets how much a player can say.
 - **Decided**: Health stays on screen. The player's is in the status line; each monster in view
   has a bar under it.
 - **Decided**: Walking into a monster attacks it.
+- **Decided**: Monsters' stats live in the `enemies` table: name, health, power and defense. The
+  name is also the sprite's name. Floors read the table when they are built, so changing a row
+  changes monsters on the next new floor.
 - **Decided**: The first monsters:
 
-  | Monster  | Health | Strength | Defense | Against a level 1 player |
+  | Monster  | Health | Power    | Defense | Against a level 1 player |
   |----------|-------:|---------:|--------:|--------------------------|
   | Bat      | 3      | 2        | 1       | Hits for 1; dies to one hit of 4 |
   | Scorpion | 10     | 7        | 3       | Hits for 2; takes five hits of 2 |
@@ -310,7 +312,7 @@ Create the database once, then point the server at it:
 ```bash
 createdb -h localhost -U postgres rogue_social
 psql -h localhost -U postgres -d rogue_social -f db/schema.sql
-psql -h localhost -U postgres -d rogue_social -f db/seed.sql     # the player, laura
+psql -h localhost -U postgres -d rogue_social -f db/seed.sql     # the player, laura, and the enemies
 
 export ROGUE_DB_PASSWORD='...'   # required; nothing is stored in the repo
 # Optional: ROGUE_DB_URL (default jdbc:postgresql://localhost:5432/rogue_social)
@@ -366,12 +368,13 @@ There is no sign-in yet, so anyone can create a user. This is for development.
 backend/src/main/java/com/roguesocial/
 ├── maze/      Wilson's algorithm, copied from Letter Maze
 ├── dungeon/   Floor, FloorGenerator, RoomCarver, LineOfSight, Run, RunService, RunStore, Bank,
-│              Monster, MonsterType, MonsterTurns, Combat, PlayerStats
+│              Monster, EnemyType, EnemyCatalog, MonsterTurns, Combat, PlayerStats
+├── enemy/     EnemyRepository (the enemies table)
 ├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), UserController
 └── web/       REST API, and serves the React app at /play
 db/
 ├── schema.sql     The whole current database, for a new empty database
-├── seed.sql       The one player until there is sign-in
+├── seed.sql       Starting rows: the one player until there is sign-in, and the enemies
 └── migrations/    Numbered change scripts for an existing database
 frontend/src/
 ├── App.jsx       Status line, arrow keys, message log

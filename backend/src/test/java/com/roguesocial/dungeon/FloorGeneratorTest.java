@@ -10,7 +10,7 @@ import com.roguesocial.maze.WilsonMazeGenerator;
 
 class FloorGeneratorTest {
 
-    private final FloorGenerator generator = new FloorGenerator(new WilsonMazeGenerator());
+    private final FloorGenerator generator = new FloorGenerator(new WilsonMazeGenerator(), TestFloors.ENEMIES);
 
     @RepeatedTest(10)
     void scattersGoldOnOpenFloorAwayFromEntranceAndExit() {
@@ -35,7 +35,7 @@ class FloorGeneratorTest {
         assertThat(floor.isWall(floor.exit())).isFalse();
 
         assertThat(floor.monsters()).hasSize(FloorGenerator.BATS + FloorGenerator.SCORPIONS);
-        assertThat(floor.monsters()).filteredOn(m -> m.type() == MonsterType.SCORPION)
+        assertThat(floor.monsters()).filteredOn(m -> m.type().name().equals("scorpion"))
                 .hasSize(FloorGenerator.SCORPIONS);
         for (Monster m : floor.monsters()) {
             assertThat(floor.isWall(m.pos())).isFalse();

@@ -15,6 +15,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
+import com.roguesocial.dungeon.EnemyCatalog;
+import com.roguesocial.dungeon.EnemyType;
 import com.roguesocial.dungeon.PlayerStats;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -31,9 +33,14 @@ class RunControllerTest {
     @MockitoBean
     private PlayerStats stats;
 
+    @MockitoBean
+    private EnemyCatalog enemies;
+
     @BeforeEach
     void startingStats() {
         Mockito.when(stats.lookup(Mockito.anyString())).thenReturn(new PlayerStats.Stats(1, 5, 5, 20));
+        Mockito.when(enemies.byName(Mockito.anyString()))
+                .thenAnswer(call -> new EnemyType(call.getArgument(0), 3, 2, 1));
     }
 
     private String startRun() throws Exception {

@@ -4,7 +4,7 @@ package com.roguesocial.dungeon;
 public interface PlayerStats {
 
     /**
-     * @param power     the player's strength in an attack
+     * @param power     how hard the player hits
      * @param maxHealth the health a run starts with
      */
     record Stats(int level, int power, int defense, int maxHealth) {

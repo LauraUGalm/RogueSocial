@@ -130,7 +130,7 @@ public class RunService {
         if (target != null) {
             int damage = Combat.damage(run.stats().power(), target.type().defense());
             target.hurt(damage);
-            String name = target.type().sprite();
+            String name = target.type().name();
             if (target.isDead()) {
                 floor.remove(target);
                 messages.add("You hit the " + name + " for " + damage + ". The " + name + " dies.");
@@ -184,7 +184,7 @@ public class RunService {
                 .filter(m -> inSight.contains(m.pos()))
                 .map(m -> {
                     Pos rel = m.pos().minus(origin);
-                    return new SeenMonster(rel.row(), rel.col(), m.type().sprite(), m.health(),
+                    return new SeenMonster(rel.row(), rel.col(), m.type().name(), m.health(),
                             m.type().maxHealth());
                 })
                 .toList();

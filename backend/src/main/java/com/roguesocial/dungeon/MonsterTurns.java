@@ -39,12 +39,12 @@ final class MonsterTurns {
                 continue; // The player just stepped up to it: it squares up but doesn't strike yet.
             }
             if (engaged.contains(m) && adjacent(m.pos(), run.player())) {
-                int damage = Combat.damage(m.type().strength(), run.stats().defense());
+                int damage = Combat.damage(m.type().power(), run.stats().defense());
                 run.hurt(damage);
-                messages.add("The " + m.type().sprite() + " " + m.type().verb() + " you for "
+                messages.add("The " + m.type().name() + " " + m.type().verb() + " you for "
                         + damage + ".");
                 if (run.health() == 0) {
-                    messages.add("The " + m.type().sprite() + " kills you.");
+                    messages.add("The " + m.type().name() + " kills you.");
                     return;
                 }
             } else if (LineOfSight.visible(floor, m.pos()).contains(run.player())) {

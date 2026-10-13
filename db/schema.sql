@@ -34,4 +34,17 @@ CREATE TABLE public.users (
 CREATE UNIQUE INDEX users_username_lower_uidx ON public.users (lower(username));
 CREATE UNIQUE INDEX users_email_lower_uidx    ON public.users (lower(email));
 
+-- One row per kind of monster, with its stats. Floors read this table when they are built, so a
+-- change here applies to the next new floor. `name` is also the sprite's name in sprites.json.
+-- The rows themselves are in db/seed.sql.
+CREATE TABLE public.enemies (
+    enemy_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name     varchar(32) NOT NULL
+        CONSTRAINT enemies_name_unique UNIQUE
+        CONSTRAINT enemies_name_format CHECK (name ~ '^[a-z_]+$'),
+    health   integer NOT NULL CONSTRAINT enemies_health_min  CHECK (health >= 1),
+    power    integer NOT NULL CONSTRAINT enemies_power_min   CHECK (power >= 0),
+    defense  integer NOT NULL CONSTRAINT enemies_defense_min CHECK (defense >= 0)
+);
+
 COMMIT;

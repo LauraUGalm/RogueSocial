@@ -32,7 +32,7 @@ public record TurnRecord(
     static List<MonsterAt> monsters(Run run) {
         var inSight = LineOfSight.visible(run.floor(), run.player());
         return run.floor().monsters().stream()
-                .map(m -> new MonsterAt(m.type().sprite(), m.pos().row(), m.pos().col(), m.health(),
+                .map(m -> new MonsterAt(m.type().name(), m.pos().row(), m.pos().col(), m.health(),
                         inSight.contains(m.pos())))
                 .toList();
     }

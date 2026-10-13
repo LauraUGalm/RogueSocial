@@ -10,6 +10,17 @@ final class TestFloors {
     private TestFloors() {
     }
 
+    /** The enemies as seeded in db/seed.sql. */
+    static final EnemyType BAT = new EnemyType("bat", 3, 2, 1);
+    static final EnemyType SCORPION = new EnemyType("scorpion", 10, 7, 3);
+
+    /** A catalog holding just the seeded enemies, so tests need no database. */
+    static final EnemyCatalog ENEMIES = name -> switch (name) {
+        case "bat" -> BAT;
+        case "scorpion" -> SCORPION;
+        default -> throw new java.util.NoSuchElementException(name);
+    };
+
     /** The starting player in these tests: level 1, 5 power, 5 defense, 20 health. */
     static final PlayerStats.Stats STATS = new PlayerStats.Stats(1, 5, 5, 20);
 
@@ -31,7 +42,7 @@ final class TestFloors {
 
     /** A generator that always returns the floor {@code make} builds. */
     static FloorGenerator always(java.util.function.Supplier<Floor> make) {
-        return new FloorGenerator(null) {
+        return new FloorGenerator(null, null) {
             @Override
             public Floor generate(Random random) {
                 return make.get();

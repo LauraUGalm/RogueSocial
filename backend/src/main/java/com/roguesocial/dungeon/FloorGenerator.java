@@ -35,9 +35,11 @@ public class FloorGenerator {
     static final int MONSTER_MIN_DISTANCE = 12;
 
     private final WilsonMazeGenerator mazes;
+    private final EnemyCatalog enemies;
 
-    public FloorGenerator(WilsonMazeGenerator mazes) {
+    public FloorGenerator(WilsonMazeGenerator mazes, EnemyCatalog enemies) {
         this.mazes = mazes;
+        this.enemies = enemies;
     }
 
     public Floor generate(Random random) {
@@ -74,8 +76,11 @@ public class FloorGenerator {
                 .filter(p -> Math.abs(p.row() - entrance.row()) + Math.abs(p.col() - entrance.col())
                         >= MONSTER_MIN_DISTANCE)
                 .toList();
+        // Stats are read fresh for each floor, so a change to the enemies table applies next floor.
+        EnemyType bat = enemies.byName("bat");
+        EnemyType scorpion = enemies.byName("scorpion");
         for (int i = 0; i < BATS + SCORPIONS && i < lairs.size(); i++) {
-            monsters.add(new Monster(i < BATS ? MonsterType.BAT : MonsterType.SCORPION, lairs.get(i)));
+            monsters.add(new Monster(i < BATS ? bat : scorpion, lairs.get(i)));
         }
         return new Floor(walls, entrance, exit, gold, monsters);
     }

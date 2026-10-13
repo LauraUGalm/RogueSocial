@@ -17,7 +17,7 @@ import com.roguesocial.maze.WilsonMazeGenerator;
 
 class RoomCarverTest {
 
-    private final FloorGenerator generator = new FloorGenerator(new WilsonMazeGenerator());
+    private final FloorGenerator generator = new FloorGenerator(new WilsonMazeGenerator(), TestFloors.ENEMIES);
 
     @RepeatedTest(50)
     void keepsTheOuterWallAndEveryCellReachable() {
