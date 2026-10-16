@@ -6,8 +6,11 @@ import static org.springframework.data.mongodb.core.query.Query.query;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 import org.bson.types.ObjectId;
 import org.springframework.dao.DuplicateKeyException;
@@ -156,6 +159,28 @@ public class PostService {
         long removed = mongo.remove(query(where("postId").is(post.id()).and("userId").is(me.userId())),
                 Like.class).getDeletedCount();
         return removed == 0 ? post : addLikes(post.id(), -1);
+    }
+
+    /**
+     * Which of these posts this player has liked, so a page of posts can show a filled heart.
+     *
+     * <p>One query for the whole page, not one per post: likes with this {@code userId} whose
+     * {@code postId} is {@code $in} the list, asking Mongo for just the distinct {@code postId}s.
+     * The unique {@code postId, userId} index answers it, each id in the list becoming one quick
+     * look-up in the index, and the like documents themselves are never read.
+     */
+    public Set<String> likedAmong(String username, Collection<String> postIds) {
+        if (postIds.isEmpty()) {
+            return Set.of();
+        }
+        indexes.ensure();
+        User me = user(username);
+        // The query side converts the hex strings to ObjectIds, because Like.postId says it is
+        // one. Distinct results skip that mapping and come back as raw ObjectIds.
+        Set<String> liked = new HashSet<>();
+        mongo.findDistinct(query(where("userId").is(me.userId()).and("postId").in(postIds)),
+                "postId", Like.class, ObjectId.class).forEach(id -> liked.add(id.toHexString()));
+        return liked;
     }
 
     /**

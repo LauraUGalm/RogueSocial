@@ -3,6 +3,7 @@ package com.roguesocial.web;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -21,11 +22,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
+
 import com.roguesocial.social.FollowService;
 import com.roguesocial.social.NotEnoughGoldException;
 import com.roguesocial.social.NotYourPostException;
 import com.roguesocial.social.Post;
 import com.roguesocial.social.PostService;
+import com.roguesocial.social.Purse;
 
 /**
  * Posts, replies, likes, follows and the feed.
@@ -46,50 +50,72 @@ public class SocialController {
     public record EditedPost(String text) {
     }
 
+    /** A post as one player sees it: the stored fields, plus whether they have liked it. */
+    public record PostView(@JsonUnwrapped Post post, boolean liked) {
+    }
+
+    public record Posted(PostView post, int goldSpent) {
+    }
+
+    /** Who the request acts as, and the gold they have to post with. */
+    public record Me(String username, long bankGold) {
+    }
+
     private final PostService posts;
     private final FollowService follows;
+    private final Purse purse;
     private final String player;
 
-    public SocialController(PostService posts, FollowService follows,
+    public SocialController(PostService posts, FollowService follows, Purse purse,
             @Value("${rogue.player}") String player) {
         this.posts = posts;
         this.follows = follows;
+        this.purse = purse;
         this.player = player;
+    }
+
+    @GetMapping("/me")
+    public Me me(@RequestHeader(value = USER_HEADER, required = false) String as) {
+        return new Me(actor(as), purse.balance(actor(as)));
     }
 
     @PostMapping("/posts")
     @ResponseStatus(HttpStatus.CREATED)
-    public PostService.Posted post(@RequestHeader(value = USER_HEADER, required = false) String as,
+    public Posted post(@RequestHeader(value = USER_HEADER, required = false) String as,
             @RequestBody NewPost body) {
-        return posts.post(actor(as), body.text(), body.replyTo());
+        PostService.Posted posted = posts.post(actor(as), body.text(), body.replyTo());
+        return new Posted(new PostView(posted.post(), false), posted.goldSpent());
     }
 
     @PatchMapping("/posts/{id}")
-    public PostService.Posted edit(@RequestHeader(value = USER_HEADER, required = false) String as,
+    public Posted edit(@RequestHeader(value = USER_HEADER, required = false) String as,
             @PathVariable String id, @RequestBody EditedPost body) {
-        return posts.edit(actor(as), id, body.text());
+        PostService.Posted posted = posts.edit(actor(as), id, body.text());
+        return new Posted(views(actor(as), List.of(posted.post())).getFirst(), posted.goldSpent());
     }
 
     @GetMapping("/posts/{id}")
-    public Post find(@PathVariable String id) {
-        return posts.find(id);
+    public PostView find(@RequestHeader(value = USER_HEADER, required = false) String as,
+            @PathVariable String id) {
+        return views(actor(as), List.of(posts.find(id))).getFirst();
     }
 
     @GetMapping("/posts/{id}/replies")
-    public List<Post> replies(@PathVariable String id) {
-        return posts.replies(id);
+    public List<PostView> replies(@RequestHeader(value = USER_HEADER, required = false) String as,
+            @PathVariable String id) {
+        return views(actor(as), posts.replies(id));
     }
 
     @PutMapping("/posts/{id}/like")
-    public Post like(@RequestHeader(value = USER_HEADER, required = false) String as,
+    public PostView like(@RequestHeader(value = USER_HEADER, required = false) String as,
             @PathVariable String id) {
-        return posts.like(actor(as), id);
+        return new PostView(posts.like(actor(as), id), true);
     }
 
     @DeleteMapping("/posts/{id}/like")
-    public Post unlike(@RequestHeader(value = USER_HEADER, required = false) String as,
+    public PostView unlike(@RequestHeader(value = USER_HEADER, required = false) String as,
             @PathVariable String id) {
-        return posts.unlike(actor(as), id);
+        return new PostView(posts.unlike(actor(as), id), false);
     }
 
     @PutMapping("/follows/{username}")
@@ -107,9 +133,15 @@ public class SocialController {
     }
 
     @GetMapping("/feed")
-    public List<Post> feed(@RequestHeader(value = USER_HEADER, required = false) String as,
+    public List<PostView> feed(@RequestHeader(value = USER_HEADER, required = false) String as,
             @RequestParam(required = false) String before) {
-        return posts.feed(actor(as), before);
+        return views(actor(as), posts.feed(actor(as), before));
+    }
+
+    /** Marks the ones this player has liked, asking Mongo once for the whole list. */
+    private List<PostView> views(String username, List<Post> page) {
+        Set<String> liked = posts.likedAmong(username, page.stream().map(Post::id).toList());
+        return page.stream().map(p -> new PostView(p, liked.contains(p.id()))).toList();
     }
 
     private String actor(String as) {

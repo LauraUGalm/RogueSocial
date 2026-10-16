@@ -147,6 +147,20 @@ class PostServiceTest {
     }
 
     @Test
+    void aPageOfPostsKnowsWhichOnesYouLiked() {
+        String a = posts.post("ann", "a", null).post().id();
+        String b = posts.post("ann", "b", null).post().id();
+        String c = posts.post("ann", "c", null).post().id();
+        posts.like("bob", a);
+        posts.like("bob", c);
+        posts.like("cat", b);
+
+        assertThat(posts.likedAmong("bob", List.of(a, b, c))).containsExactlyInAnyOrder(a, c);
+        assertThat(posts.likedAmong("cat", List.of(a, c))).isEmpty();
+        assertThat(posts.likedAmong("bob", List.of())).isEmpty();
+    }
+
+    @Test
     void theFeedShowsWhoYouFollowNewestFirst() {
         follows.follow("ann", "bob");
         follows.follow("ann", "bob");

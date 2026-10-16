@@ -11,6 +11,9 @@ public interface Purse {
      */
     long spendGold(String username, int gold);
 
+    /** The player's banked gold. */
+    long balance(String username);
+
     /** Gives back gold taken by {@link #spendGold} when the post couldn't be saved. */
     void refundGold(String username, int gold);
 }

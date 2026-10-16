@@ -60,7 +60,8 @@ public class UserBank implements Bank, Purse {
         depositGold(username, gold);
     }
 
-    private long balance(String username) {
+    @Override
+    public long balance(String username) {
         return db.sql("SELECT bank_gold FROM users WHERE lower(username) = lower(:username)")
                 .param("username", username)
                 .query(Long.class)

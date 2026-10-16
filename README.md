@@ -398,6 +398,7 @@ try the feed with more than one player. That header is also only for development
 
 | Request | Does |
 |---|---|
+| `GET /api/me` | `{username, bankGold}`: who you are acting as, and the gold you can post with. |
 | `POST /api/posts` with `{"text": "...", "replyTo": null}` | Posts, or replies when `replyTo` is a post's `id`. `201` with `{post, goldSpent}`. `402` without the gold, `400` for a blank post or a reply to a reply. |
 | `PATCH /api/posts/{id}` with `{"text": "..."}` | Edits your post, paying for any new symbols. `403` if it isn't yours. |
 | `GET /api/posts/{id}` | One post. |
@@ -407,7 +408,7 @@ try the feed with more than one player. That header is also only for development
 | `GET /api/feed?before={id}` | 20 posts from you and the people you follow, newest first. Pass the last `id` for the next page. |
 
 A post is `{id, authorId, authorName, text, paid, createdAt, editedAt, replyTo, likeCount,
-replyCount}`. `503` means a database is down.
+replyCount, liked}`, where `liked` says whether you have liked it. `503` means a database is down.
 
 ### Layout
 
@@ -426,7 +427,12 @@ db/
 ├── seed.sql       Starting rows: the one player until there is sign-in, and the enemies
 └── migrations/    Numbered change scripts for an existing database
 frontend/src/
-├── App.jsx       Status line, arrow keys, message log
+├── App.jsx       The Dungeon and Tavern tabs
+├── Dungeon.jsx   Status line, arrow keys, message log
+├── Tavern.jsx    Banked gold, the post box, following, the feed
+├── PostCard.jsx  One post: likes, replies, editing
+├── Composer.jsx  A text box that shows what posting it costs
+├── cost.js       The cost of a post, counted the way the server counts it
 ├── PlayArea.jsx  Draws the view around the player from the sprite sheet
 ├── run.js        Builds up the player's map from what the server reveals
 ├── api.js        Calls to the server

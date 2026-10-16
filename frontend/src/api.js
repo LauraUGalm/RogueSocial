@@ -24,3 +24,17 @@ export const startRun = () => call('POST', '/api/runs');
 export const resumeRun = (id) => call('GET', `/api/runs/${encodeURIComponent(id)}`);
 export const takeTurn = (id, turn, action) =>
   call('POST', `/api/runs/${encodeURIComponent(id)}/turns`, { turn, action });
+
+// The Tavern: posts, replies, likes, follows. Gold for posting comes out of the bank.
+const post = (id) => `/api/posts/${encodeURIComponent(id)}`;
+
+export const getMe = () => call('GET', '/api/me');
+export const getFeed = (before) =>
+  call('GET', before ? `/api/feed?before=${encodeURIComponent(before)}` : '/api/feed');
+export const createPost = (text, replyTo = null) => call('POST', '/api/posts', { text, replyTo });
+export const editPost = (id, text) => call('PATCH', post(id), { text });
+export const getReplies = (id) => call('GET', `${post(id)}/replies`);
+export const likePost = (id) => call('PUT', `${post(id)}/like`);
+export const unlikePost = (id) => call('DELETE', `${post(id)}/like`);
+export const follow = (username) => call('PUT', `/api/follows/${encodeURIComponent(username)}`);
+export const unfollow = (username) => call('DELETE', `/api/follows/${encodeURIComponent(username)}`);
