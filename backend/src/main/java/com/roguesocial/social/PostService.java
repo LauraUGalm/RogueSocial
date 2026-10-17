@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 
 import org.bson.types.ObjectId;
@@ -27,7 +28,7 @@ import com.roguesocial.user.User;
 import com.roguesocial.user.UserRepository;
 
 /**
- * Posting, replying, editing, liking, and the feed.
+ * Posting, replying, editing, deleting, liking, and the feed.
  *
  * <p>Gold lives in Postgres and posts live in Mongo, and no transaction spans both. So gold is
  * taken first, then the post is written, and if the write fails the gold is given back.
@@ -69,15 +70,19 @@ public class PostService {
         indexes.ensure();
         User author = user(username);
         int cost = costOf(text);
-        if (replyTo != null && find(replyTo).replyTo() != null) {
-            throw new IllegalArgumentException("Replies are one level deep: reply to the post instead");
+        if (replyTo != null) {
+            Post parent = find(replyTo);
+            if (parent.replyTo() != null) {
+                throw new IllegalArgumentException("Replies are one level deep: reply to the post instead");
+            }
+            notDeleted(parent);
         }
 
         purse.spendGold(author.username(), cost);
         Post saved;
         try {
             saved = mongo.insert(new Post(null, author.userId(), author.username(), text, cost, now(),
-                    null, replyTo, 0, 0));
+                    null, null, replyTo, 0, 0));
         } catch (RuntimeException e) {
             purse.refundGold(author.username(), cost);
             throw e;
@@ -99,6 +104,7 @@ public class PostService {
         if (post.authorId() != author.userId()) {
             throw new NotYourPostException();
         }
+        notDeleted(post);
         int extra = Math.max(0, costOf(text) - post.paid());
         if (extra > 0) {
             purse.spendGold(author.username(), extra);
@@ -118,8 +124,47 @@ public class PostService {
             throw new IllegalStateException("The post changed while you were editing it; try again");
         }
         return new Posted(new Post(post.id(), post.authorId(), post.authorName(), text,
-                post.paid() + extra, post.createdAt(), editedAt, post.replyTo(), post.likeCount(),
+                post.paid() + extra, post.createdAt(), editedAt, null, post.replyTo(), post.likeCount(),
                 post.replyCount()), extra);
+    }
+
+    /**
+     * Deletes your post. No gold comes back: what was said was paid for.
+     *
+     * <p>A post nobody has replied to is removed, with its likes. One with replies becomes a
+     * tombstone (its text unset, {@code deletedAt} set) so the replies, which other people paid
+     * for, still have a post to sit under. Deleting the last reply under a tombstone removes it.
+     *
+     * @return the tombstone, or empty if the post is gone
+     */
+    public Optional<Post> delete(String username, String postId) {
+        indexes.ensure();
+        User author = user(username);
+        Post post = find(postId);
+        if (post.authorId() != author.userId()) {
+            throw new NotYourPostException();
+        }
+        if (post.deletedAt() != null) {
+            return Optional.of(post);
+        }
+
+        // "Remove it if replyCount is 0" is one step in Mongo, so a reply counted after find()
+        // above still saves the post. A reply written but not yet counted is the gap (see the
+        // class comment): its parent can go, and the reply is left where nothing shows it.
+        long removed = mongo.remove(query(where("_id").is(post.id()).and("replyCount").is(0)), Post.class)
+                .getDeletedCount();
+        Post tombstone = null;
+        if (removed == 0) {
+            tombstone = mongo.findAndModify(byId(post.id()),
+                    new Update().unset("text").set("deletedAt", now()).set("likeCount", 0),
+                    FindAndModifyOptions.options().returnNew(true), Post.class);
+        }
+        // The postId, userId index finds these by its first field alone.
+        mongo.remove(query(where("postId").is(post.id())), Like.class);
+        if (removed == 1 && post.replyTo() != null) {
+            replyRemoved(post.replyTo());
+        }
+        return Optional.ofNullable(tombstone);
     }
 
     public Post find(String postId) {
@@ -144,6 +189,7 @@ public class PostService {
         indexes.ensure();
         User me = user(username);
         Post post = find(postId);
+        notDeleted(post);
         try {
             mongo.insert(new Like(null, post.id(), me.userId(), now()));
         } catch (DuplicateKeyException alreadyLiked) {
@@ -212,6 +258,20 @@ public class PostService {
     private Post addLikes(String postId, int change) {
         return mongo.findAndModify(byId(postId), new Update().inc("likeCount", change),
                 FindAndModifyOptions.options().returnNew(true), Post.class);
+    }
+
+    private void replyRemoved(String parentId) {
+        mongo.updateFirst(byId(parentId), new Update().inc("replyCount", -1), Post.class);
+        // A tombstone was only kept for its replies. Spring leaves null fields out of the
+        // document, so "deletedAt exists" means "is a tombstone".
+        mongo.remove(query(where("_id").is(parentId).and("deletedAt").exists(true).and("replyCount").is(0)),
+                Post.class);
+    }
+
+    private static void notDeleted(Post post) {
+        if (post.deletedAt() != null) {
+            throw new IllegalArgumentException("That post was deleted");
+        }
     }
 
     private static int costOf(String text) {

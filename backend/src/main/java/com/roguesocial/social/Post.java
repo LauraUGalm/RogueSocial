@@ -20,6 +20,8 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
  * @param paid       the gold paid for this post so far, edits included. An edit only costs the
  *                   symbols that take it past this
  * @param editedAt   null until the first edit
+ * @param deletedAt  null unless the post was deleted while it had replies. It is then a
+ *                   tombstone: its text is gone, but it stays so the replies still have a parent
  * @param replyTo    the post this replies to, or null for a top-level post. Stored as an
  *                   ObjectId, not a string, so it matches the parent's {@code _id}
  * @param likeCount  kept on the post so showing a post doesn't count its likes
@@ -34,6 +36,7 @@ public record Post(
         int paid,
         Instant createdAt,
         Instant editedAt,
+        Instant deletedAt,
         @Field(targetType = FieldType.OBJECT_ID) String replyTo,
         int likeCount,
         int replyCount) {

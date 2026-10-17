@@ -13,6 +13,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -133,6 +134,58 @@ class PostServiceTest {
 
         assertThatThrownBy(() -> posts.edit("bob", id, "yours"))
                 .isInstanceOf(NotYourPostException.class);
+    }
+
+    @Test
+    void aPostNobodyRepliedToIsRemovedWithItsLikes() {
+        String id = posts.post("ann", "oops", null).post().id();
+        posts.like("bob", id);
+
+        assertThat(posts.delete("ann", id)).isEmpty();
+        assertThatThrownBy(() -> posts.find(id)).isInstanceOf(NoSuchElementException.class);
+        assertThat(mongo.count(new Query(), Like.class)).isZero();
+        verify(purse, never()).refundGold(anyString(), anyInt());
+    }
+
+    @Test
+    void aPostWithRepliesStaysAsATombstone() {
+        String id = posts.post("ann", "Floor 3 has a troll", null).post().id();
+        posts.post("bob", "Bring a bigger stick", id);
+        posts.like("bob", id);
+
+        Post tombstone = posts.delete("ann", id).orElseThrow();
+
+        assertThat(tombstone.text()).isNull();
+        assertThat(tombstone.deletedAt()).isNotNull();
+        assertThat(tombstone.likeCount()).isZero();
+        assertThat(posts.replies(id)).extracting(Post::text).containsExactly("Bring a bigger stick");
+        assertThat(posts.feed("ann", null)).extracting(Post::id).containsExactly(id);
+        assertThat(posts.delete("ann", id)).as("again").contains(tombstone);
+        assertThatThrownBy(() -> posts.post("cat", "What troll?", id)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> posts.edit("ann", id, "back")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> posts.like("cat", id)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void deletingAReplyLowersTheCountAndTheLastOneTakesTheTombstone() {
+        String id = posts.post("ann", "Floor 3 has a troll", null).post().id();
+        String bobs = posts.post("bob", "Bring a bigger stick", id).post().id();
+        String cats = posts.post("cat", "Or run", id).post().id();
+
+        assertThat(posts.delete("bob", bobs)).isEmpty();
+        assertThat(posts.find(id).replyCount()).isEqualTo(1);
+
+        posts.delete("ann", id);
+        posts.delete("cat", cats);
+        assertThatThrownBy(() -> posts.find(id)).isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void onlyTheAuthorCanDelete() {
+        String id = posts.post("ann", "mine", null).post().id();
+
+        assertThatThrownBy(() -> posts.delete("bob", id)).isInstanceOf(NotYourPostException.class);
+        assertThat(posts.find(id).text()).isEqualTo("mine");
     }
 
     @Test

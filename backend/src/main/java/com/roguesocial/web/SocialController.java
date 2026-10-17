@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -92,6 +93,15 @@ public class SocialController {
             @PathVariable String id, @RequestBody EditedPost body) {
         PostService.Posted posted = posts.edit(actor(as), id, body.text());
         return new Posted(views(actor(as), List.of(posted.post())).getFirst(), posted.goldSpent());
+    }
+
+    /** 200 with the tombstone when the post had replies, 204 when it is gone. */
+    @DeleteMapping("/posts/{id}")
+    public ResponseEntity<PostView> delete(@RequestHeader(value = USER_HEADER, required = false) String as,
+            @PathVariable String id) {
+        return posts.delete(actor(as), id)
+                .map(tombstone -> ResponseEntity.ok(new PostView(tombstone, false)))
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @GetMapping("/posts/{id}")

@@ -247,7 +247,11 @@ under Apache 2.0.
 - **Decided**: Replies are one level deep: a reply belongs to a post, never to another reply.
 - **Decided**: Likes are free, one per person per post.
 - **Decided**: Posts can be edited (see section 2 for what an edit costs).
-- **Open**: Whether posts can be deleted, and whether that refunds anything.
+- **Decided** (2026-10-17): Players can delete their own posts and replies. Deleting gives no
+  gold back; otherwise posting, getting noticed and deleting would make talking free.
+- **Decided** (2026-10-17): A deleted post that has replies stays as a tombstone, shown as
+  "[deleted]", so the replies (which other people paid for) still make sense. It can't be liked,
+  edited or replied to, and it goes away with its last reply. A post without replies is removed.
 - **Proposed**: Gold is in Postgres and posts are in Mongo, so posting cannot be one transaction.
   The server takes the gold first, then writes the post, and gives the gold back if the write
   fails.
@@ -319,7 +323,7 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - There is a `users` table and an API to create and look up users, but no sign-in. The browser
   remembers its run ID in local storage.
 - Silver is not built.
-- The social side has a server API but no screens yet, and no profile page.
+- There is no profile page.
 - Death ends the run and loses the gold carried; the tombstone and recovery runs (section 4) are
   not built. Killing monsters gives nothing yet (no drops, no experience).
 - No levels, gear, healing, the overview map, or the rate limit.
@@ -401,14 +405,16 @@ try the feed with more than one player. That header is also only for development
 | `GET /api/me` | `{username, bankGold}`: who you are acting as, and the gold you can post with. |
 | `POST /api/posts` with `{"text": "...", "replyTo": null}` | Posts, or replies when `replyTo` is a post's `id`. `201` with `{post, goldSpent}`. `402` without the gold, `400` for a blank post or a reply to a reply. |
 | `PATCH /api/posts/{id}` with `{"text": "..."}` | Edits your post, paying for any new symbols. `403` if it isn't yours. |
+| `DELETE /api/posts/{id}` | Deletes your post, refunding nothing. `204` if it is gone, or `200` with the tombstone if it has replies. `403` if it isn't yours. |
 | `GET /api/posts/{id}` | One post. |
 | `GET /api/posts/{id}/replies` | Its replies, oldest first (up to 100). |
 | `PUT` / `DELETE /api/posts/{id}/like` | Likes or unlikes; both are safe to repeat. Returns the post. |
 | `PUT` / `DELETE /api/follows/{username}` | Follows or unfollows. `204`. |
 | `GET /api/feed?before={id}` | 20 posts from you and the people you follow, newest first. Pass the last `id` for the next page. |
 
-A post is `{id, authorId, authorName, text, paid, createdAt, editedAt, replyTo, likeCount,
-replyCount, liked}`, where `liked` says whether you have liked it. `503` means a database is down.
+A post is `{id, authorId, authorName, text, paid, createdAt, editedAt, deletedAt, replyTo,
+likeCount, replyCount, liked}`, where `liked` says whether you have liked it. A tombstone has
+`deletedAt` set and `text` null; liking, editing or replying to it gets `400`. `503` means a database is down.
 
 ### Layout
 

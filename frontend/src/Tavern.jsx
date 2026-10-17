@@ -73,7 +73,13 @@ export default function Tavern({ active }) {
         <p className="hint">Nothing here yet. Post something, or follow someone to see their posts.</p>
       )}
       {posts.map((p) => (
-        <PostCard key={p.id} post={p} me={me} onSpent={spent} />
+        <PostCard
+          key={p.id}
+          post={p}
+          me={me}
+          onSpent={spent}
+          onGone={() => setPosts((ps) => ps.filter((x) => x.id !== p.id))}
+        />
       ))}
       {more && (
         <button className="quiet" onClick={older}>

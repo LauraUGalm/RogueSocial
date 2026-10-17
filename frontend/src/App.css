@@ -245,6 +245,23 @@ button.icon.liked {
   color: var(--health);
 }
 
+button.icon.danger {
+  color: var(--error);
+}
+
+.post-text.deleted {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.post footer .confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
 .replies {
   display: flex;
   flex-direction: column;
