@@ -1,12 +1,17 @@
 package com.roguesocial.dungeon;
 
-/** Where gold goes when a player leaves the dungeon alive. */
+/** Where gold and exp go when a player leaves the dungeon alive. */
 public interface Bank {
 
+    /** The player's banked gold, total exp, and the level that exp has reached. */
+    record Balance(long gold, long exp, int level) {
+    }
+
     /**
-     * Adds {@code gold} to the player's bank.
+     * Adds {@code gold} and {@code exp} to the player's bank, raising their level if the exp
+     * reaches a new one.
      *
-     * @return the player's banked gold afterwards
+     * @return the player's balance afterwards
      */
-    long depositGold(String username, int gold);
+    Balance deposit(String username, int gold, int exp);
 }

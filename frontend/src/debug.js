@@ -20,6 +20,7 @@ export function snapshot(state) {
     player: state.player,
     health: state.health,
     gold: state.gold,
+    exp: state.exp,
   };
 }
 

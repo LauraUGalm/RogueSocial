@@ -23,6 +23,7 @@ export function applyView(state, view, fresh) {
     turn: view.turn,
     status: view.status,
     gold: view.gold,
+    exp: view.exp,
     player: view.player,
     health: view.health,
     stats: view.stats,

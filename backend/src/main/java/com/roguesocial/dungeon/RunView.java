@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * What the browser is told after a turn. Positions are relative to the floor's entrance, so the
  * browser never learns the floor's true size or where its edges are.
  *
+ * @param exp        exp earned this run, banked with the gold on leaving
  * @param health     the player's health right now
  * @param stats      the player's level, power, defense and maximum health
  * @param onExit     whether the player is standing on the exit, and so can leave
@@ -23,6 +24,7 @@ public record RunView(
         int turn,
         Run.Status status,
         int gold,
+        int exp,
         Pos player,
         int health,
         PlayerStats.Stats stats,

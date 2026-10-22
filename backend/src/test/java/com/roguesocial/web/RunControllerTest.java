@@ -44,7 +44,7 @@ class RunControllerTest {
     void startingStats() {
         Mockito.when(stats.lookup(Mockito.anyString())).thenReturn(new PlayerStats.Stats(1, 5, 5, 20));
         Mockito.when(enemies.byName(Mockito.anyString()))
-                .thenAnswer(call -> new EnemyType(call.getArgument(0), 3, 2, 1));
+                .thenAnswer(call -> new EnemyType(call.getArgument(0), 3, 2, 1, 1));
     }
 
     private String startRun() throws Exception {

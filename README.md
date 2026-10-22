@@ -98,8 +98,8 @@ directly sets how much a player can say.
   rectangles of 2 to 4 cells a side have every wall inside them removed. The outer wall is never
   touched, and removing walls only adds paths, so every floor stays solvable. Rooms keep a cell of
   maze between them so they don't merge.
-- **Decided**: Each player has a level, power, defense and maximum health, stored on their
-  `users` row. Everyone starts at level 1 with 5 power, 5 defense and 20 health.
+- **Decided**: Each player has a level, power, defense and maximum health. The `users` row holds
+  the level and the level-1 (base) stats; everyone's base is 5 power, 5 defense and 20 health.
 - **Decided**: Each run starts at full health. The health a player has right now belongs to the
   run, not the user.
 
@@ -119,23 +119,36 @@ directly sets how much a player can say.
 - **Decided**: Health stays on screen. The player's is in the status line; each monster in view
   has a bar under it.
 - **Decided**: Walking into a monster attacks it.
-- **Decided**: Monsters' stats live in the `enemies` table: name, health, power and defense. The
+- **Decided**: Monsters' stats live in the `enemies` table: name, health, power, defense and exp. The
   name is also the sprite's name. Floors read the table when they are built, so changing a row
   changes monsters on the next new floor.
 - **Decided**: The first monsters:
 
-  | Monster  | Health | Power    | Defense | Against a level 1 player |
-  |----------|-------:|---------:|--------:|--------------------------|
-  | Bat      | 3      | 2        | 1       | Hits for 1; dies to one hit of 4 |
-  | Scorpion | 10     | 7        | 3       | Hits for 2; takes five hits of 2 |
+  | Monster  | Health | Power    | Defense | Exp | Against a level 1 player |
+  |----------|-------:|---------:|--------:|----:|--------------------------|
+  | Bat      | 3      | 2        | 1       | 1   | Hits for 1; dies to one hit of 4 |
+  | Scorpion | 10     | 7        | 3       | 3   | Hits for 2; takes five hits of 2 |
 
 - **Proposed** (as built): A monster that can see the player moves toward them; one that can't
   wanders. Leaving at the exit happens before the monsters move. A level 1 floor has 4 bats and
   2 scorpions, at least 12 steps from the entrance.
 - **Open**: Nothing heals yet, and a scorpion fight costs about 10 of a new player's 20 health,
   so two scorpions can be fatal. Healing, or fewer scorpions on low floors, may be needed.
-- **Open**: How levelling works: what earns experience, how fast levels come, and how much power
-  and defense a level adds.
+
+### Experience and levels
+
+- **Decided**: Killing a monster earns its exp. Like gold, exp is carried during the run, banked
+  (to `users.exp`) when the player leaves alive, and lost if they die.
+- **Decided**: Level 2 takes 20 exp in total. Each level after takes 1% more exp than the one
+  before, rounded up: steps of 20, 21, 22, 23 and so on, so level 3 is at 41 exp and level 4 at
+  63. Banking exp raises `users.level` when the total reaches a new level; it never goes down.
+- **Decided**: Stats are worked out from the level, not stored: each level after the first adds
+  1 power, 1 defense and 2 maximum health to the base stats. A level 5 player has 9 power,
+  9 defense and 28 health. The rules are in `Levels.java` and `User.stats()`.
+- **Decided**: A run keeps the stats the player had when it started, so a new level applies from
+  the next run.
+- **Open**: The curve is still being workshopped. With the rounding, 1% adds exactly 1 exp per
+  level until the steps reach 100 (around level 80); a bigger percentage would steepen it sooner.
 - **Open**: How unseen monsters behave: wander, sleep until the player is near, or hunt.
 
 ## 7. What the player can see
@@ -319,14 +332,32 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - Positions sent to the browser are relative to the entrance.
 - Bats and scorpions, combat and death, with health on screen (see Combat in section 6).
   Runs take the player's level, power, defense and maximum health from `users` when they start.
-- Standing on the exit (`>`), the player can leave (`L` or the button). That adds the gold they
-  carry to their bank in Postgres and ends the run. The bank is credited before the run ends,
+- Killing monsters earns exp, banked with the gold on leaving. Banked exp raises the player's
+  level, and each level raises their stats (see Experience and levels in section 6).
+- Standing on the exit (`>`), the player can leave (`L` or the button). That adds the gold and
+  exp they carry to their bank in Postgres and ends the run. The bank is credited before the run ends,
   so if the database is down the run simply carries on.
 - Sign up, sign in and sign out. Runs, banking and the Tavern all act as whoever is signed in,
   and a run can only be played by the player who started it.
 - Closing the tab and coming back resumes the run, with the map so far.
 - Posts, replies, edits, likes, follows and the feed (section 11), stored in MongoDB. Posting
   spends banked gold from Postgres, one per visible symbol; an emoji is one.
+
+**Next**
+
+1. **Touch controls for the map.** Moving only works with the arrow keys, so the game can't be
+   played on a phone or tablet. This has to come before deploying.
+2. **Deploy to the Raspberry Pi** (`raspi.local`). The Pi already runs Tomcat on port 8080, with
+   Stonks at `/stonks/`. To decide: build Rogue Social as a WAR for that Tomcat (at, say,
+   `/roguesocial/`), or run the Spring Boot jar on its own port. It also needs Postgres and
+   MongoDB on the Pi. The Pi is a 4 Model B (8 GB) on the newest Pi OS, with the newest Java,
+   which can run our Java 21 build. MongoDB is the catch: the official builds from 5.0 on need
+   an ARMv8.2 CPU, and the Pi 4's is ARMv8.0, so they won't start. Options: MongoDB 4.4 (the
+   last official build that runs there, but out of support), a community build of a newer
+   version made for the Pi 4, or Mongo on another machine (for example Atlas's free tier). Once
+   it's up, add a link to it on the Pi's Tomcat index page (`raspi.local:8080`), next to the one
+   for Stonks.
+3. **Buy the domain**, once the game is further along.
 
 **Not built yet**
 
@@ -339,8 +370,9 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - Silver is not built.
 - There is no profile page.
 - Death ends the run and loses the gold carried; the tombstone and recovery runs (section 4) are
-  not built. Killing monsters gives nothing yet (no drops, no experience).
-- No levels, gear, healing, the overview map, or the rate limit.
+  not built. Killing monsters gives exp but no drops.
+- No gear, healing, the overview map, or the rate limit. The player's level and exp aren't shown
+  outside a run yet.
 - The player always starts at the entrance; choosing a start position is not built.
 - Rooms do not light up on entry yet (section 7); line of sight is used everywhere.
 - The gold amounts (8 piles of 5 to 25) are placeholders until the economy is designed.
@@ -397,7 +429,8 @@ the real database and are skipped unless `ROGUE_DB_PASSWORD` is set; they only c
 | `GET /api/runs/{id}` | The run as it stands, including `remembered`: every block seen so far. |
 | `POST /api/runs/{id}/turns` with `{"turn": 3, "action": "NORTH"}` | Plays one turn. Actions: `NORTH`, `SOUTH`, `EAST`, `WEST`, and `LEAVE` (only on the exit). |
 
-Every response has `runId`, `turn`, `status` (`ACTIVE`, `LEFT` or `DIED`), `gold` (carried),
+Every response has `runId`, `turn`, `status` (`ACTIVE`, `LEFT` or `DIED`), `gold` and `exp`
+(carried),
 `player`, `health`, `stats` (`level`, `power`, `defense`, `maxHealth`), `onExit`, `visible`
 (tiles in sight now), `monsters` (in sight now: `row`, `col`, `kind`, `health`, `maxHealth`) and
 `messages`. A tile is `{row, col, terrain}` with `terrain`
@@ -407,7 +440,7 @@ Every response has `runId`, `turn`, `status` (`ACTIVE`, `LEFT` or `DIED`), `gold
 | Request | Does |
 |---|---|
 | `POST /api/users` with `{"username": "...", "email": "...", "password": "..."}` | Signs up and signs in. `201` with the player. `400` for a bad username or email, or with `problems` (what the password still needs) for a weak password; `409` if the username or email is taken. |
-| `GET /api/users/{username}` | `{userId, username, joined, level, power, defense, maxHealth}`, never the email. `404` if there is none. |
+| `GET /api/users/{username}` | `{userId, username, joined, level, power, defense, maxHealth}` (stats at their level), never the email. `404` if there is none. |
 | `POST /api/session` with `{"username": "...", "password": "..."}` | Signs in. `401` "Wrong username or password", whichever was wrong. |
 | `GET /api/session` | The signed-in player, or `401`. |
 | `DELETE /api/session` | Signs out. `204`. |
@@ -441,7 +474,8 @@ backend/src/main/java/com/roguesocial/
 ├── enemy/     EnemyRepository (the enemies table)
 ├── social/    Post, Follow, Like (Mongo documents), PostCost, PostService, FollowService,
 │              SocialIndexes, Purse (gold for posts, implemented by UserBank)
-├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), UserController,
+├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), Levels (the exp
+│              curve and what a level adds), UserController,
 │              Accounts and PasswordRules (sign-up, bcrypt), SessionController and Sessions
 └── web/       REST API (runs, debug, social), SignedInResolver (who is asking), and serves the
                React app at /play

@@ -18,7 +18,8 @@ public class EnemyRepository implements EnemyCatalog {
             rs.getString("name"),
             rs.getInt("health"),
             rs.getInt("power"),
-            rs.getInt("defense"));
+            rs.getInt("defense"),
+            rs.getInt("exp"));
 
     private final JdbcClient db;
 
@@ -28,7 +29,7 @@ public class EnemyRepository implements EnemyCatalog {
 
     @Override
     public EnemyType byName(String name) {
-        return db.sql("SELECT name, health, power, defense FROM enemies WHERE name = :name")
+        return db.sql("SELECT name, health, power, defense, exp FROM enemies WHERE name = :name")
                 .param("name", name)
                 .query(ROW)
                 .optional()
@@ -37,7 +38,7 @@ public class EnemyRepository implements EnemyCatalog {
     }
 
     public List<EnemyType> all() {
-        return db.sql("SELECT name, health, power, defense FROM enemies ORDER BY enemy_id")
+        return db.sql("SELECT name, health, power, defense, exp FROM enemies ORDER BY enemy_id")
                 .query(ROW)
                 .list();
     }

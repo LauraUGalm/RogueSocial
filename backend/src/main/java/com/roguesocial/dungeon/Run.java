@@ -13,9 +13,9 @@ public final class Run {
 
     public enum Status {
         ACTIVE,
-        /** Left through the exit; the gold carried went to the bank. */
+        /** Left through the exit; the gold and exp carried went to the bank. */
         LEFT,
-        /** Killed. The gold carried is lost. */
+        /** Killed. The gold and exp carried are lost. */
         DIED
     }
 
@@ -28,6 +28,7 @@ public final class Run {
     private Pos player;
     private int turn;
     private int carriedGold;
+    private int carriedExp;
     private int health;
     private Status status = Status.ACTIVE;
 
@@ -76,6 +77,11 @@ public final class Run {
         return carriedGold;
     }
 
+    /** Exp earned this run by killing monsters. Like gold, it is still at risk until banked. */
+    public int carriedExp() {
+        return carriedExp;
+    }
+
     public Status status() {
         return status;
     }
@@ -100,6 +106,10 @@ public final class Run {
 
     void addGold(int amount) {
         carriedGold += amount;
+    }
+
+    void addExp(int amount) {
+        carriedExp += amount;
     }
 
     void endTurn() {

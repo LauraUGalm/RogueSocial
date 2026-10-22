@@ -23,7 +23,12 @@ CREATE TABLE public.users (
     -- The bank (README section 3). Gold is credited when the player leaves the dungeon alive.
     bank_gold   bigint NOT NULL DEFAULT 0 CONSTRAINT users_bank_gold_nonneg CHECK (bank_gold >= 0),
     bank_silver bigint NOT NULL DEFAULT 0 CONSTRAINT users_bank_silver_nonneg CHECK (bank_silver >= 0),
-    -- Combat stats. Everyone starts at level 1 with 5 power, 5 defense and 20 health.
+    -- Banked with the gold when the player leaves the dungeon alive. `level` follows from it
+    -- (Levels.java).
+    exp bigint NOT NULL DEFAULT 0 CONSTRAINT users_exp_nonneg CHECK (exp >= 0),
+    -- Combat stats. Everyone starts at level 1 with 5 power, 5 defense and 20 health. These are
+    -- the level-1 stats: each level after adds 1 power, 1 defense and 2 health on top
+    -- (User.stats() and Levels.java), so raising `level` is all a level-up needs.
     level   integer NOT NULL DEFAULT 1 CONSTRAINT users_level_min   CHECK (level >= 1),
     power   integer NOT NULL DEFAULT 5 CONSTRAINT users_power_min   CHECK (power >= 0),
     defense integer NOT NULL DEFAULT 5 CONSTRAINT users_defense_min CHECK (defense >= 0),
@@ -46,7 +51,9 @@ CREATE TABLE public.enemies (
         CONSTRAINT enemies_name_format CHECK (name ~ '^[a-z_]+$'),
     health   integer NOT NULL CONSTRAINT enemies_health_min  CHECK (health >= 1),
     power    integer NOT NULL CONSTRAINT enemies_power_min   CHECK (power >= 0),
-    defense  integer NOT NULL CONSTRAINT enemies_defense_min CHECK (defense >= 0)
+    defense  integer NOT NULL CONSTRAINT enemies_defense_min CHECK (defense >= 0),
+    -- What the player earns for killing one.
+    exp      integer NOT NULL CONSTRAINT enemies_exp_min     CHECK (exp >= 0)
 );
 
 COMMIT;

@@ -174,6 +174,7 @@ export default function Dungeon({ active }) {
       </div>
       <div className="status gold">
         <span>Gold carried: {state.gold}</span>
+        <span>Exp carried: {state.exp}</span>
         <span>Turn {state.turn}</span>
       </div>
 

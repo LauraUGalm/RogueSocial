@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import com.roguesocial.dungeon.Bank;
 import com.roguesocial.social.NotEnoughGoldException;
 
 /** Runs against the real database; see {@link UserRepositoryTest}. */
@@ -43,6 +44,17 @@ class UserBankTest {
         assertThat(bank.depositGold(name.toUpperCase().replace("ZZTEST_", "zztest_"), 30))
                 .isEqualTo(42);
         assertThat(bank.depositGold(name, 0)).isEqualTo(42);
+    }
+
+    @Test
+    void depositingExpRaisesTheLevel() {
+        String name = "zztest_" + UUID.randomUUID().toString().substring(0, 8);
+        users.create(name, name + "@example.com", null);
+
+        assertThat(bank.deposit(name, 5, 19)).isEqualTo(new Bank.Balance(5, 19, 1));
+        assertThat(bank.deposit(name, 0, 1)).isEqualTo(new Bank.Balance(5, 20, 2));
+        assertThat(bank.deposit(name, 0, 43)).isEqualTo(new Bank.Balance(5, 63, 4));
+        assertThat(users.findByUsername(name).orElseThrow().level()).isEqualTo(4);
     }
 
     @Test

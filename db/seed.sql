@@ -8,7 +8,7 @@ VALUES ('laura', 'laura@localhost')
 ON CONFLICT DO NOTHING;
 
 -- The monsters.
-INSERT INTO public.enemies (name, health, power, defense) VALUES
-    ('bat',       3, 2, 1),
-    ('scorpion', 10, 7, 3)
+INSERT INTO public.enemies (name, health, power, defense, exp) VALUES
+    ('bat',       3, 2, 1, 1),
+    ('scorpion', 10, 7, 3, 3)
 ON CONFLICT (name) DO NOTHING;

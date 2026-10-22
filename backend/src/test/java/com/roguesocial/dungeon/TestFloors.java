@@ -11,8 +11,8 @@ final class TestFloors {
     }
 
     /** The enemies as seeded in db/seed.sql. */
-    static final EnemyType BAT = new EnemyType("bat", 3, 2, 1);
-    static final EnemyType SCORPION = new EnemyType("scorpion", 10, 7, 3);
+    static final EnemyType BAT = new EnemyType("bat", 3, 2, 1, 1);
+    static final EnemyType SCORPION = new EnemyType("scorpion", 10, 7, 3, 3);
 
     /** A catalog holding just the seeded enemies, so tests need no database. */
     static final EnemyCatalog ENEMIES = name -> switch (name) {

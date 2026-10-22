@@ -36,6 +36,7 @@ class CombatTest {
         assertThat(List.of(BAT.maxHealth(), BAT.power(), BAT.defense())).containsExactly(3, 2, 1);
         assertThat(List.of(SCORPION.maxHealth(), SCORPION.power(), SCORPION.defense()))
                 .containsExactly(10, 7, 3);
+        assertThat(List.of(BAT.exp(), SCORPION.exp())).containsExactly(1, 3);
     }
 
     //   #######
@@ -50,9 +51,9 @@ class CombatTest {
                         "#.....#",
                         "#######"),
                 new Pos(1, 1), new Pos(2, 5), Map.of(), List.of(monsters))),
-                new InMemoryRunStore(), (u, g) -> {
+                new InMemoryRunStore(), (u, g, e) -> {
                     deposits.add(g);
-                    return g;
+                    return new Bank.Balance(g, e, stats.level());
                 }, u -> stats, coins);
     }
 
@@ -63,8 +64,9 @@ class CombatTest {
 
         RunView view = s.act("laura", id, 0, EAST);
 
-        assertThat(view.messages()).containsExactly("You hit the bat for 4. The bat dies.");
+        assertThat(view.messages()).containsExactly("You hit the bat for 4. The bat dies. +1 exp.");
         assertThat(view.monsters()).isEmpty();
+        assertThat(view.exp()).isEqualTo(1);
         assertThat(view.player()).isEqualTo(new Pos(0, 0));
         assertThat(view.health()).isEqualTo(20);
     }
@@ -77,7 +79,7 @@ class CombatTest {
         RunView view = s.act("laura", id, 0, EAST);
 
         assertThat(view.messages()).containsExactly(
-                "The bat bites you for 1.", "You hit the bat for 4. The bat dies.");
+                "The bat bites you for 1.", "You hit the bat for 4. The bat dies. +1 exp.");
         assertThat(view.health()).isEqualTo(19);
         assertThat(view.monstersWentFirst()).isTrue();
     }
@@ -96,7 +98,9 @@ class CombatTest {
             view = s.act("laura", id, turn, EAST);
         }
 
-        assertThat(view.messages()).containsExactly("You hit the scorpion for 2. The scorpion dies.");
+        assertThat(view.messages())
+                .containsExactly("You hit the scorpion for 2. The scorpion dies. +3 exp.");
+        assertThat(view.exp()).isEqualTo(3);
         assertThat(view.monsters()).isEmpty();
         assertThat(view.health()).isEqualTo(12);
     }
@@ -112,7 +116,7 @@ class CombatTest {
         assertThat(view.messages()).containsExactly(
                 "The bat bites you for 1.",
                 "The scorpion stings you for 2.",
-                "You hit the bat for 4. The bat dies.");
+                "You hit the bat for 4. The bat dies. +1 exp.");
         assertThat(view.health()).isEqualTo(17);
         assertThat(view.monsters()).singleElement()
                 .satisfies(m -> assertThat(m.kind()).isEqualTo("scorpion"));
@@ -131,7 +135,7 @@ class CombatTest {
         assertThat(view.player()).isEqualTo(new Pos(0, 0));
         assertThat(view.messages()).containsExactly(
                 "The scorpion stings you for 2.", "The scorpion kills you.",
-                "You die. The 0 gold you carried is lost.");
+                "You die. The 0 gold and 0 exp you carried are lost.");
         assertThatThrownBy(() -> s.act("laura", id, 1, WEST)).isInstanceOf(RunOverException.class);
         assertThat(deposits).isEmpty();
     }

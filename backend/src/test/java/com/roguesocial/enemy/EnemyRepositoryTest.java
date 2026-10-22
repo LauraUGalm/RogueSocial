@@ -22,8 +22,8 @@ class EnemyRepositoryTest {
 
     @Test
     void readsTheSeededEnemies() {
-        assertThat(enemies.byName("bat")).isEqualTo(new EnemyType("bat", 3, 2, 1));
-        assertThat(enemies.byName("scorpion")).isEqualTo(new EnemyType("scorpion", 10, 7, 3));
+        assertThat(enemies.byName("bat")).isEqualTo(new EnemyType("bat", 3, 2, 1, 1));
+        assertThat(enemies.byName("scorpion")).isEqualTo(new EnemyType("scorpion", 10, 7, 3, 3));
         assertThat(enemies.all()).extracting(EnemyType::name).contains("bat", "scorpion");
     }
 

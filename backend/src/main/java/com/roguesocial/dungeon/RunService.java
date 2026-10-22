@@ -110,7 +110,8 @@ public class RunService {
         }
         if (run.health() == 0) {
             run.die();
-            messages.add("You die. The " + run.carriedGold() + " gold you carried is lost.");
+            messages.add("You die. The " + run.carriedGold() + " gold and " + run.carriedExp()
+                    + " exp you carried are lost.");
         }
         run.endTurn();
         run.see(LineOfSight.visible(floor, run.player()));
@@ -129,7 +130,9 @@ public class RunService {
             String name = target.type().name();
             if (target.isDead()) {
                 floor.remove(target);
-                messages.add("You hit the " + name + " for " + damage + ". The " + name + " dies.");
+                run.addExp(target.type().exp());
+                messages.add("You hit the " + name + " for " + damage + ". The " + name + " dies. +"
+                        + target.type().exp() + " exp.");
             } else {
                 messages.add("You hit the " + name + " for " + damage + ".");
             }
@@ -148,20 +151,23 @@ public class RunService {
     }
 
     /**
-     * Banks the gold carried and ends the run. The bank is credited first: if that fails, the run
-     * carries on as it was, so the gold is never lost or banked twice.
+     * Banks the gold and exp carried and ends the run. The bank is credited first: if that fails,
+     * the run carries on as it was, so nothing is ever lost or banked twice.
      */
     private RunView leave(Run run, List<String> messages) {
         if (!run.player().equals(run.floor().exit())) {
             messages.add("There is no way out here.");
             return view(run, false, messages, null);
         }
-        long banked = bank.depositGold(run.owner(), run.carriedGold());
+        Bank.Balance banked = bank.deposit(run.owner(), run.carriedGold(), run.carriedExp());
         run.leave();
         run.endTurn();
         store.save(run);
-        messages.add("You leave the dungeon and bank " + run.carriedGold() + " gold. "
-                + "Your bank now holds " + banked + " gold.");
+        messages.add("You leave the dungeon and bank " + run.carriedGold() + " gold and "
+                + run.carriedExp() + " exp. Your bank now holds " + banked.gold() + " gold.");
+        if (banked.level() > run.stats().level()) {
+            messages.add("You reach level " + banked.level() + "!");
+        }
         return view(run, false, messages, null);
     }
 
@@ -187,7 +193,7 @@ public class RunService {
                             m.type().maxHealth());
                 })
                 .toList();
-        return new RunView(run.id(), run.turn(), run.status(), run.carriedGold(),
+        return new RunView(run.id(), run.turn(), run.status(), run.carriedGold(), run.carriedExp(),
                 run.player().minus(origin), run.health(), run.stats(),
                 run.player().equals(floor.exit()), visible, monsters, monstersFirst, remembered,
                 messages);

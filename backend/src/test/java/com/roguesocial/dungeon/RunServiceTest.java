@@ -25,9 +25,10 @@ class RunServiceTest {
     //   #.#####
     //   #.$...#   entrance at (3,1), 10 gold at (3,2)
     //   #######
-    /** A bank that just remembers deposits. */
+    /** A bank that just remembers gold deposits. Exp never raises the level here. */
     private final Map<String, Long> deposits = new HashMap<>();
-    private final Bank bank = (username, gold) -> deposits.merge(username, (long) gold, Long::sum);
+    private final Bank bank = (username, gold, exp) -> new Bank.Balance(
+            deposits.merge(username, (long) gold, Long::sum), exp, TestFloors.STATS.level());
 
     private final RunService service = new RunService(TestFloors.always(() -> TestFloors.floor(
             List.of(
@@ -127,10 +128,25 @@ class RunServiceTest {
 
         assertThat(view.status()).isEqualTo(Run.Status.LEFT);
         assertThat(view.messages()).containsExactly(
-                "You leave the dungeon and bank 10 gold. Your bank now holds 10 gold.");
+                "You leave the dungeon and bank 10 gold and 0 exp. Your bank now holds 10 gold.");
         assertThat(deposits).containsEntry("laura", 10L);
         assertThatThrownBy(() -> service.act("laura", id, 7, Action.LEAVE)).isInstanceOf(RunOverException.class);
         assertThat(deposits).containsEntry("laura", 10L);
+    }
+
+    @Test
+    void leavingAnnouncesANewLevel() {
+        RunService levelling = new RunService(TestFloors.always(() -> TestFloors.floor(
+                List.of("###", "#.#", "###"), new Pos(1, 1), new Pos(1, 1), Map.of())),
+                new InMemoryRunStore(), (u, g, e) -> new Bank.Balance(g, 20, 2),
+                u -> TestFloors.STATS, new Random());
+        String id = levelling.start("laura").runId();
+
+        RunView view = levelling.act("laura", id, 0, Action.LEAVE);
+
+        assertThat(view.messages()).containsExactly(
+                "You leave the dungeon and bank 0 gold and 0 exp. Your bank now holds 0 gold.",
+                "You reach level 2!");
     }
 
     @Test
@@ -149,7 +165,7 @@ class RunServiceTest {
     void ifTheBankFailsTheRunCarriesOn() {
         RunService failing = new RunService(TestFloors.always(() -> TestFloors.floor(
                 List.of("###", "#.#", "###"), new Pos(1, 1), new Pos(1, 1), Map.of())),
-                new InMemoryRunStore(), (u, g) -> {
+                new InMemoryRunStore(), (u, g, e) -> {
                     throw new IllegalStateException("database is down");
                 }, u -> TestFloors.STATS, new Random());
         String id = failing.start("laura").runId();

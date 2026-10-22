@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.roguesocial.dungeon.PlayerStats;
+
 /** Signing up, and looking up players. */
 @RestController
 @RequestMapping("/api/users")
@@ -29,8 +31,9 @@ public class UserController {
             long userId, String username, OffsetDateTime joined,
             int level, int power, int defense, int maxHealth) {
         static PublicUser of(User u) {
+            PlayerStats.Stats stats = u.stats();
             return new PublicUser(u.userId(), u.username(), u.createdAt(),
-                    u.level(), u.power(), u.defense(), u.maxHealth());
+                    stats.level(), stats.power(), stats.defense(), stats.maxHealth());
         }
     }
 

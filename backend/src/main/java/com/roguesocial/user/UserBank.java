@@ -4,6 +4,7 @@ import java.util.NoSuchElementException;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.roguesocial.dungeon.Bank;
 import com.roguesocial.social.NotEnoughGoldException;
@@ -19,7 +20,40 @@ public class UserBank implements Bank, Purse {
         this.db = db;
     }
 
+    /**
+     * The level is worked out from the new exp total in Java ({@link Levels}), so it takes a
+     * second statement; the transaction makes the two one change.
+     */
     @Override
+    @Transactional
+    public Balance deposit(String username, int gold, int exp) {
+        if (gold < 0 || exp < 0) {
+            throw new IllegalArgumentException("Can't deposit negative gold or exp");
+        }
+        record Totals(long gold, long exp) {
+        }
+        Totals totals = db.sql("""
+                UPDATE users SET bank_gold = bank_gold + :gold, exp = exp + :exp
+                WHERE lower(username) = lower(:username)
+                RETURNING bank_gold, exp""")
+                .param("gold", gold)
+                .param("exp", exp)
+                .param("username", username)
+                .query((rs, n) -> new Totals(rs.getLong("bank_gold"), rs.getLong("exp")))
+                .optional()
+                .orElseThrow(() -> new NoSuchElementException("No user " + username));
+        int level = db.sql("""
+                UPDATE users SET level = GREATEST(level, :level)
+                WHERE lower(username) = lower(:username)
+                RETURNING level""")
+                .param("level", Levels.levelFor(totals.exp()))
+                .param("username", username)
+                .query(Integer.class)
+                .single();
+        return new Balance(totals.gold(), totals.exp(), level);
+    }
+
+    /** @return the player's banked gold afterwards */
     public long depositGold(String username, int gold) {
         if (gold < 0) {
             throw new IllegalArgumentException("Can't deposit negative gold");
