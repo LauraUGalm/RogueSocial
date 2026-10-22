@@ -53,15 +53,15 @@ class CombatTest {
                 new InMemoryRunStore(), (u, g) -> {
                     deposits.add(g);
                     return g;
-                }, u -> stats, coins, "laura");
+                }, u -> stats, coins);
     }
 
     @Test
     void walkingIntoABatKillsItInOneHit() {
         RunService s = service(TestFloors.coins(false), TestFloors.STATS, new Monster(BAT, new Pos(1, 2)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, EAST);
+        RunView view = s.act("laura", id, 0, EAST);
 
         assertThat(view.messages()).containsExactly("You hit the bat for 4. The bat dies.");
         assertThat(view.monsters()).isEmpty();
@@ -72,9 +72,9 @@ class CombatTest {
     @Test
     void whenTheMonstersWinTheCoinFlipTheyStrikeFirst() {
         RunService s = service(TestFloors.coins(true), TestFloors.STATS, new Monster(BAT, new Pos(1, 2)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, EAST);
+        RunView view = s.act("laura", id, 0, EAST);
 
         assertThat(view.messages()).containsExactly(
                 "The bat bites you for 1.", "You hit the bat for 4. The bat dies.");
@@ -86,14 +86,14 @@ class CombatTest {
     void aScorpionTakesFiveHitsAndStingsForTwo() {
         RunService s = service(TestFloors.coins(), TestFloors.STATS,
                 new Monster(SCORPION, new Pos(1, 2)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, EAST);
+        RunView view = s.act("laura", id, 0, EAST);
         assertThat(view.messages()).containsExactly("You hit the scorpion for 2.", "The scorpion stings you for 2.");
         assertThat(view.monsters()).singleElement()
                 .satisfies(m -> assertThat(m.health()).isEqualTo(8));
         for (int turn = 1; turn < 5; turn++) {
-            view = s.act(id, turn, EAST);
+            view = s.act("laura", id, turn, EAST);
         }
 
         assertThat(view.messages()).containsExactly("You hit the scorpion for 2. The scorpion dies.");
@@ -105,9 +105,9 @@ class CombatTest {
     void everyMonsterNextToThePlayerAttacks() {
         RunService s = service(TestFloors.coins(true), TestFloors.STATS,
                 new Monster(BAT, new Pos(1, 2)), new Monster(SCORPION, new Pos(2, 1)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, EAST);
+        RunView view = s.act("laura", id, 0, EAST);
 
         assertThat(view.messages()).containsExactly(
                 "The bat bites you for 1.",
@@ -122,9 +122,9 @@ class CombatTest {
     void dyingEndsTheRunAndLosesTheGold() {
         PlayerStats.Stats frail = new PlayerStats.Stats(1, 5, 5, 2);
         RunService s = service(TestFloors.coins(true), frail, new Monster(SCORPION, new Pos(2, 1)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, SOUTH);
+        RunView view = s.act("laura", id, 0, SOUTH);
 
         assertThat(view.status()).isEqualTo(Run.Status.DIED);
         assertThat(view.health()).isZero();
@@ -132,7 +132,7 @@ class CombatTest {
         assertThat(view.messages()).containsExactly(
                 "The scorpion stings you for 2.", "The scorpion kills you.",
                 "You die. The 0 gold you carried is lost.");
-        assertThatThrownBy(() -> s.act(id, 1, WEST)).isInstanceOf(RunOverException.class);
+        assertThatThrownBy(() -> s.act("laura", id, 1, WEST)).isInstanceOf(RunOverException.class);
         assertThat(deposits).isEmpty();
     }
 
@@ -140,9 +140,9 @@ class CombatTest {
     void steppingUpToAMonsterIsSafe() {
         // The player wins the flip and steps next to the bat; it doesn't get a free bite.
         RunService s = service(TestFloors.coins(false), TestFloors.STATS, new Monster(BAT, new Pos(1, 3)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, EAST);
+        RunView view = s.act("laura", id, 0, EAST);
 
         assertThat(view.health()).isEqualTo(20);
         assertThat(view.messages()).isEmpty();
@@ -155,9 +155,9 @@ class CombatTest {
         // The monsters win the flip while a scorpion is beside the player; the player steps away.
         RunService s = service(TestFloors.coins(true), TestFloors.STATS,
                 new Monster(SCORPION, new Pos(2, 1)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, EAST);
+        RunView view = s.act("laura", id, 0, EAST);
 
         assertThat(view.health()).isEqualTo(20);
         assertThat(view.messages()).isEmpty();
@@ -169,7 +169,7 @@ class CombatTest {
         // gave it free bites. Now only standing and fighting does.
         Random random = new Random();
         RunService s = service(random, TestFloors.STATS, new Monster(BAT, new Pos(1, 4)));
-        RunView view = s.start();
+        RunView view = s.start("laura");
         String id = view.runId();
 
         for (int i = 0; i < 50; i++) {
@@ -185,7 +185,7 @@ class CombatTest {
             if (steps.isEmpty()) {
                 continue;
             }
-            view = s.act(id, view.turn(), steps.get(random.nextInt(steps.size())));
+            view = s.act("laura", id, view.turn(), steps.get(random.nextInt(steps.size())));
         }
 
         assertThat(view.health()).isEqualTo(20);
@@ -194,9 +194,9 @@ class CombatTest {
     @Test
     void aMonsterThatSeesThePlayerClosesIn() {
         RunService s = service(TestFloors.coins(), TestFloors.STATS, new Monster(BAT, new Pos(1, 5)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, SOUTH);
+        RunView view = s.act("laura", id, 0, SOUTH);
 
         // The player is now at (1,0); the bat started 5 steps away and takes one step closer.
         assertThat(view.monsters()).singleElement().satisfies(m -> assertThat(
@@ -207,9 +207,9 @@ class CombatTest {
     @Test
     void walkingIntoAWallLetsNoMonsterMove() {
         RunService s = service(TestFloors.coins(true), TestFloors.STATS, new Monster(BAT, new Pos(1, 2)));
-        String id = s.start().runId();
+        String id = s.start("laura").runId();
 
-        RunView view = s.act(id, 0, Action.NORTH);
+        RunView view = s.act("laura", id, 0, Action.NORTH);
 
         assertThat(view.health()).isEqualTo(20);
         assertThat(view.turn()).isZero();

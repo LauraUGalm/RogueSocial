@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Dungeon from './Dungeon.jsx';
+import SignIn from './SignIn.jsx';
 import Tavern from './Tavern.jsx';
+import { getSession, signOut, whenSignedOut } from './api.js';
 
 const TAB_KEY = 'rogueSocial.tab';
 
@@ -14,6 +16,14 @@ function savedTab() {
 
 export default function App() {
   const [tab, setTab] = useState(savedTab);
+  // undefined while asking the server, null when nobody is signed in.
+  const [player, setPlayer] = useState(undefined);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    whenSignedOut(() => setPlayer(null));
+    getSession().then(setPlayer, (err) => setError(`Couldn't reach the server: ${err.message}`));
+  }, []);
 
   function show(next) {
     setTab(next);
@@ -24,9 +34,38 @@ export default function App() {
     }
   }
 
+  async function leave() {
+    await signOut().catch(() => {});
+    setPlayer(null);
+  }
+
+  if (error) {
+    return (
+      <main className="app">
+        <h1>Rogue Social</h1>
+        <p className="error">{error}</p>
+      </main>
+    );
+  }
+  if (player === undefined) return <main className="app" />;
+  if (player === null) {
+    return (
+      <main className="app">
+        <h1>Rogue Social</h1>
+        <SignIn onSignedIn={setPlayer} />
+      </main>
+    );
+  }
+
   return (
     <main className="app">
       <h1>Rogue Social</h1>
+      <div className="signed-in hint">
+        {player.username}
+        <button className="quiet" onClick={leave}>
+          Sign out
+        </button>
+      </div>
       <nav className="tabs">
         <button className={tab === 'dungeon' ? 'tab current' : 'tab'} onClick={() => show('dungeon')}>
           Dungeon

@@ -4,6 +4,8 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,15 +16,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Creating and looking up players. There is no sign-in yet, so anyone can create a user;
- * this is for development until accounts are designed.
- */
+/** Signing up, and looking up players. */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
 
-    public record NewUser(String username, String email) {
+    public record NewUser(String username, String email, String password) {
     }
 
     /** What anyone may see about a player. Never includes the email. */
@@ -36,15 +35,20 @@ public class UserController {
     }
 
     private final UserRepository users;
+    private final Accounts accounts;
 
-    public UserController(UserRepository users) {
+    public UserController(UserRepository users, Accounts accounts) {
         this.users = users;
+        this.accounts = accounts;
     }
 
+    /** Signs up, and signs the new player in. */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public PublicUser create(@RequestBody NewUser body) {
-        return PublicUser.of(users.create(body.username(), body.email()));
+    public PublicUser create(@RequestBody NewUser body, HttpServletRequest request) {
+        User user = accounts.signUp(body.username(), body.email(), body.password());
+        Sessions.signIn(request, user);
+        return PublicUser.of(user);
     }
 
     @GetMapping("/{username}")
@@ -64,6 +68,13 @@ public class UserController {
     @ResponseStatus(HttpStatus.CONFLICT)
     public Map<String, String> taken(UsernameTakenException e) {
         return Map.of("error", e.getMessage());
+    }
+
+    /** {@code problems} lists what the password still needs, for the sign-up form to show. */
+    @ExceptionHandler(WeakPasswordException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> weakPassword(WeakPasswordException e) {
+        return Map.of("error", e.getMessage(), "problems", e.problems());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

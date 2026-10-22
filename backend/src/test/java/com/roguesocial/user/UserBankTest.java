@@ -37,7 +37,7 @@ class UserBankTest {
     @Test
     void depositsAddUp() {
         String name = "zztest_" + UUID.randomUUID().toString().substring(0, 8);
-        users.create(name, name + "@example.com");
+        users.create(name, name + "@example.com", null);
 
         assertThat(bank.depositGold(name, 12)).isEqualTo(12);
         assertThat(bank.depositGold(name.toUpperCase().replace("ZZTEST_", "zztest_"), 30))
@@ -48,7 +48,7 @@ class UserBankTest {
     @Test
     void spendingNeedsTheGold() {
         String name = "zztest_" + UUID.randomUUID().toString().substring(0, 8);
-        users.create(name, name + "@example.com");
+        users.create(name, name + "@example.com", null);
         bank.depositGold(name, 30);
 
         assertThat(bank.spendGold(name, 25)).isEqualTo(5);

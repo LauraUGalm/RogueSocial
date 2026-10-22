@@ -9,6 +9,13 @@ export class ApiError extends Error {
   }
 }
 
+// Called when the server says nobody is signed in (it restarted, or the session ran out), so the
+// app can show the sign-in screen. The /api/session calls answer 401 as a normal reply, not this.
+let onSignedOut = () => {};
+export function whenSignedOut(fn) {
+  onSignedOut = fn;
+}
+
 async function call(method, path, body) {
   const res = await fetch(path, {
     method,
@@ -16,9 +23,21 @@ async function call(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => null);
+  if (res.status === 401 && !path.startsWith('/api/session')) onSignedOut();
   if (!res.ok) throw new ApiError(res.status, json);
   return json;
 }
+
+// Signing up signs you in too. The session lives in a cookie the browser sends by itself.
+export const signUp = (username, email, password) => call('POST', '/api/users', { username, email, password });
+export const signIn = (username, password) => call('POST', '/api/session', { username, password });
+export const signOut = () => call('DELETE', '/api/session');
+// Who is signed in, or null.
+export const getSession = () =>
+  call('GET', '/api/session').catch((e) => {
+    if (e instanceof ApiError && e.status === 401) return null;
+    throw e;
+  });
 
 export const startRun = () => call('POST', '/api/runs');
 export const resumeRun = (id) => call('GET', `/api/runs/${encodeURIComponent(id)}`);

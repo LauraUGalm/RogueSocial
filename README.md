@@ -188,6 +188,18 @@ directly sets how much a player can say.
   400 KB limit) need revisiting for Postgres.
 - **Decided**: A `users` table holds one row per player: ID, username, email, and when they
   joined. Usernames and emails are unique ignoring case.
+- **Decided** (2026-10-17): Players sign up with a password and sign in to play. Only a bcrypt
+  hash of the password is stored. The first time a sign-up's password breaks the rules, the form
+  says it is already used by Brad Bradford, who does not exist; after that it lists what's missing.
+- **Decided** (2026-10-17): Password rules follow NIST SP 800-63B: at least 15 characters, with
+  no rules about mixing uppercase, numbers and symbols, since those push people toward
+  "Password1!" while length is what makes a password hard to guess. It can't contain the
+  username, be a common password (even with digits or symbols tacked on either end), or be an
+  easy pattern like a repeat, a keyboard row or counting. At most 72 bytes, bcrypt's limit.
+- **Open**: Checking new passwords against known breaches (for example the Pwned Passwords
+  service). The built-in common-password list is short.
+- **Proposed** (as built): Who is signed in is kept in a server session behind an HttpOnly,
+  SameSite=Lax cookie. Sessions live in memory and end when the server restarts.
 - **Decided**: Saved floors go in the database so they survive a player walking away for a day or
   two.
 - **Decided**: Store the whole floor, not just the random seed that generated it.
@@ -259,7 +271,7 @@ under Apache 2.0.
 ## 12. Not designed yet
 
 - What a profile shows.
-- Accounts and sign-in.
+- Password resets, changing email, and limits on how often someone can guess a password.
 - Combat rules, monster types, gear, and item stats.
 - Whether it is intended that experienced players, who earn more gold per run, become the loudest
   voices on the site.
@@ -310,8 +322,8 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - Standing on the exit (`>`), the player can leave (`L` or the button). That adds the gold they
   carry to their bank in Postgres and ends the run. The bank is credited before the run ends,
   so if the database is down the run simply carries on.
-- There is no sign-in, so every run belongs to one hard-coded player, `rogue.player=laura` in
-  `application.properties`, created by `db/seed.sql`.
+- Sign up, sign in and sign out. Runs, banking and the Tavern all act as whoever is signed in,
+  and a run can only be played by the player who started it.
 - Closing the tab and coming back resumes the run, with the map so far.
 - Posts, replies, edits, likes, follows and the feed (section 11), stored in MongoDB. Posting
   spends banked gold from Postgres, one per visible symbol; an emoji is one.
@@ -320,8 +332,10 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 
 - Runs are kept in memory (behind `RunStore`) and lost when the server restarts. They are not
   in Postgres yet.
-- There is a `users` table and an API to create and look up users, but no sign-in. The browser
+- Sessions and runs are kept in memory, so a server restart signs everyone out. The browser
   remembers its run ID in local storage.
+- There's no way to reset a forgotten password except `db/set_password.sql`, and nothing slows
+  down repeated wrong guesses.
 - Silver is not built.
 - There is no profile page.
 - Death ends the run and loses the gold carried; the tombstone and recovery runs (section 4) are
@@ -346,6 +360,7 @@ Create the database once, then point the server at it:
 createdb -h localhost -U postgres rogue_social
 psql -h localhost -U postgres -d rogue_social -f db/schema.sql
 psql -h localhost -U postgres -d rogue_social -f db/seed.sql     # the player, laura, and the enemies
+psql -h localhost -U postgres -d rogue_social -v username=laura -f db/set_password.sql   # asks for laura's password
 
 export ROGUE_DB_PASSWORD='...'   # required; nothing is stored in the repo
 # Optional: ROGUE_DB_URL (default jdbc:postgresql://localhost:5432/rogue_social)
@@ -355,8 +370,7 @@ export ROGUE_DB_PASSWORD='...'   # required; nothing is stored in the repo
 Run these from the repository folder. On a database made before a change, apply the scripts in
 `db/migrations/` in order instead of `schema.sql`.
 
-The game runs without either database until you leave the dungeon; banking and `/api/users`
-need Postgres, and the social API needs both.
+Signing in needs Postgres, so nothing can be played without it; the Tavern also needs Mongo.
 
 ```bash
 cd frontend
@@ -392,13 +406,14 @@ Every response has `runId`, `turn`, `status` (`ACTIVE`, `LEFT` or `DIED`), `gold
 
 | Request | Does |
 |---|---|
-| `POST /api/users` with `{"username": "laura", "email": "..."}` | Creates a user. `400` for a bad username, `409` if the username or email is taken. |
+| `POST /api/users` with `{"username": "...", "email": "...", "password": "..."}` | Signs up and signs in. `201` with the player. `400` for a bad username or email, or with `problems` (what the password still needs) for a weak password; `409` if the username or email is taken. |
 | `GET /api/users/{username}` | `{userId, username, joined, level, power, defense, maxHealth}`, never the email. `404` if there is none. |
+| `POST /api/session` with `{"username": "...", "password": "..."}` | Signs in. `401` "Wrong username or password", whichever was wrong. |
+| `GET /api/session` | The signed-in player, or `401`. |
+| `DELETE /api/session` | Signs out. `204`. |
 
-There is no sign-in yet, so anyone can create a user. This is for development.
-
-The social API acts as `rogue.player`, or as whoever an `X-Rogue-User` header names, so you can
-try the feed with more than one player. That header is also only for development.
+Signing in sets a `JSESSIONID` cookie. The run and social APIs answer `401` without it, and act
+as the signed-in player with it. Someone else's run is `404`.
 
 | Request | Does |
 |---|---|
@@ -426,14 +441,18 @@ backend/src/main/java/com/roguesocial/
 ├── enemy/     EnemyRepository (the enemies table)
 ├── social/    Post, Follow, Like (Mongo documents), PostCost, PostService, FollowService,
 │              SocialIndexes, Purse (gold for posts, implemented by UserBank)
-├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), UserController
-└── web/       REST API (runs, debug, social), and serves the React app at /play
+├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), UserController,
+│              Accounts and PasswordRules (sign-up, bcrypt), SessionController and Sessions
+└── web/       REST API (runs, debug, social), SignedInResolver (who is asking), and serves the
+               React app at /play
 db/
 ├── schema.sql     The whole current database, for a new empty database
-├── seed.sql       Starting rows: the one player until there is sign-in, and the enemies
+├── seed.sql       Starting rows: the first player, laura (no password), and the enemies
+├── set_password.sql  Sets a player's password from psql
 └── migrations/    Numbered change scripts for an existing database
 frontend/src/
-├── App.jsx       The Dungeon and Tavern tabs
+├── App.jsx       Sign-in, then the Dungeon and Tavern tabs
+├── SignIn.jsx    Sign in or sign up, and Brad Bradford
 ├── Dungeon.jsx   Status line, arrow keys, message log
 ├── Tavern.jsx    Banked gold, the post box, following, the feed
 ├── PostCard.jsx  One post: likes, replies, editing

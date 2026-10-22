@@ -33,7 +33,8 @@ public class UserRepository {
         this.db = db;
     }
 
-    public User create(String username, String email) {
+    /** Same checks as {@link #create}, for checking a sign-up before the slow password hashing. */
+    static void checkNew(String username, String email) {
         if (username == null || !USERNAME.matcher(username).matches()) {
             throw new IllegalArgumentException(
                     "A username is 3 to 32 letters, digits or underscores");
@@ -41,11 +42,17 @@ public class UserRepository {
         if (email == null || !email.contains("@") || email.length() > 254) {
             throw new IllegalArgumentException("That doesn't look like an email address");
         }
+    }
+
+    /** @param passwordHash bcrypt, or null for a player who can't sign in yet */
+    public User create(String username, String email, String passwordHash) {
+        checkNew(username, email);
         try {
-            return db.sql("INSERT INTO users (username, email) VALUES (:username, :email) RETURNING "
-                    + COLUMNS)
+            return db.sql("INSERT INTO users (username, email, password_hash)"
+                    + " VALUES (:username, :email, :passwordHash) RETURNING " + COLUMNS)
                     .param("username", username)
                     .param("email", email.trim())
+                    .param("passwordHash", passwordHash)
                     .query(ROW)
                     .single();
         } catch (DuplicateKeyException e) {
@@ -57,6 +64,17 @@ public class UserRepository {
         return db.sql("SELECT " + COLUMNS + " FROM users WHERE user_id = :id")
                 .param("id", userId)
                 .query(ROW)
+                .optional();
+    }
+
+    /**
+     * The bcrypt hash, kept out of {@link User} so it never ends up in a response by accident.
+     * Empty for a player who has none.
+     */
+    public Optional<String> passwordHash(long userId) {
+        return db.sql("SELECT password_hash FROM users WHERE user_id = :id AND password_hash IS NOT NULL")
+                .param("id", userId)
+                .query(String.class)
                 .optional();
     }
 

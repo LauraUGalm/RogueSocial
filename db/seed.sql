@@ -1,7 +1,6 @@
 -- Starting data for a new database. Safe to run more than once.
 
--- The one player while there is no sign-in. The server plays as this user (rogue.player in
--- application.properties).
+-- The first player. It has no password: give it one with db/set_password.sql to sign in.
 --   psql -h localhost -U postgres -d rogue_social -f db/seed.sql
 
 INSERT INTO public.users (username, email)

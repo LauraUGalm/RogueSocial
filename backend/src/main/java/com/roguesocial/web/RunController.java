@@ -18,7 +18,9 @@ import com.roguesocial.dungeon.RunService;
 import com.roguesocial.dungeon.RunService.RunOverException;
 import com.roguesocial.dungeon.RunService.StaleTurnException;
 import com.roguesocial.dungeon.RunView;
+import com.roguesocial.user.SignedIn;
 
+/** The signed-in player's runs. Someone else's run is answered as if it didn't exist. */
 @RestController
 @RequestMapping("/api/runs")
 public class RunController {
@@ -35,21 +37,21 @@ public class RunController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public RunView start() {
-        return runs.start();
+    public RunView start(SignedIn me) {
+        return runs.start(me.username());
     }
 
     @GetMapping("/{id}")
-    public RunView resume(@PathVariable String id) {
-        return runs.resume(id);
+    public RunView resume(SignedIn me, @PathVariable String id) {
+        return runs.resume(me.username(), id);
     }
 
     @PostMapping("/{id}/turns")
-    public RunView act(@PathVariable String id, @RequestBody TurnRequest request) {
+    public RunView act(SignedIn me, @PathVariable String id, @RequestBody TurnRequest request) {
         if (request.action() == null) {
             throw new IllegalArgumentException("Missing action");
         }
-        return runs.act(id, request.turn(), request.action());
+        return runs.act(me.username(), id, request.turn(), request.action());
     }
 
     @ExceptionHandler(NoSuchElementException.class)

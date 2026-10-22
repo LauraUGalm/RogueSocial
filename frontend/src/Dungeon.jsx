@@ -14,7 +14,8 @@ const KEYS = {
   L: 'LEAVE',
 };
 
-// Until there are accounts, the browser remembers which run is its own.
+// The browser remembers the run it was playing. The server only resumes it for the player who
+// started it; for anyone else it answers 404 and a new run begins.
 const RUN_KEY = 'rogueSocial.runId';
 
 function savedRunId() {

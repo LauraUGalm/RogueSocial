@@ -38,7 +38,7 @@ class UserRepositoryTest {
     @Test
     void createsAndFindsAUser() {
         String name = testName();
-        User created = users.create(name, name + "@example.com");
+        User created = users.create(name, name + "@example.com", null);
 
         assertThat(created.userId()).isPositive();
         assertThat(created.createdAt()).isNotNull();
@@ -53,27 +53,27 @@ class UserRepositoryTest {
     @Test
     void usernamesAreUniqueIgnoringCase() {
         String name = testName();
-        users.create(name, name + "@example.com");
+        users.create(name, name + "@example.com", null);
 
         assertThatThrownBy(() -> users.create(name.toUpperCase().replace("ZZTEST_", "zztest_"),
-                "other-" + name + "@example.com"))
+                "other-" + name + "@example.com", null))
                 .isInstanceOf(UsernameTakenException.class);
     }
 
     @Test
     void emailsAreUniqueIgnoringCase() {
         String name = testName();
-        users.create(name, name + "@example.com");
+        users.create(name, name + "@example.com", null);
 
-        assertThatThrownBy(() -> users.create(testName(), name.toUpperCase() + "@EXAMPLE.COM"))
+        assertThatThrownBy(() -> users.create(testName(), name.toUpperCase() + "@EXAMPLE.COM", null))
                 .isInstanceOf(UsernameTakenException.class);
     }
 
     @Test
     void rejectsABadUsernameBeforeTheDatabase() {
-        assertThatThrownBy(() -> users.create("no spaces allowed", "x@example.com"))
+        assertThatThrownBy(() -> users.create("no spaces allowed", "x@example.com", null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> users.create("ab", "x@example.com"))
+        assertThatThrownBy(() -> users.create("ab", "x@example.com", null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

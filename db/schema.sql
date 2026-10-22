@@ -9,14 +9,16 @@
 
 BEGIN;
 
--- One row per player. Sign-in is not designed yet (README section 11), so there is no
--- password or login data here.
+-- One row per player.
 CREATE TABLE public.users (
     user_id    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     -- Shown on posts. Letters, digits and underscores, 3 to 32 of them.
     username   varchar(32)  NOT NULL
         CONSTRAINT users_username_format CHECK (username ~ '^[A-Za-z0-9_]{3,32}$'),
     email      varchar(254) NOT NULL,
+    -- bcrypt, never the password itself. NULL for players made before sign-in; they can't sign in
+    -- until db/set_password.sql gives them one.
+    password_hash varchar(60),
     created_at timestamptz  NOT NULL DEFAULT now(),
     -- The bank (README section 3). Gold is credited when the player leaves the dungeon alive.
     bank_gold   bigint NOT NULL DEFAULT 0 CONSTRAINT users_bank_gold_nonneg CHECK (bank_gold >= 0),

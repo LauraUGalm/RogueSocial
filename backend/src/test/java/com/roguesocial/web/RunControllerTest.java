@@ -18,6 +18,8 @@ import com.jayway.jsonpath.JsonPath;
 import com.roguesocial.dungeon.EnemyCatalog;
 import com.roguesocial.dungeon.EnemyType;
 import com.roguesocial.dungeon.PlayerStats;
+import com.roguesocial.user.Sessions;
+import com.roguesocial.user.SignedIn;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
@@ -25,6 +27,8 @@ import org.mockito.Mockito;
 @SpringBootTest
 @AutoConfigureMockMvc
 class RunControllerTest {
+
+    private static final SignedIn LAURA = new SignedIn(1, "laura");
 
     @Autowired
     private MockMvc mvc;
@@ -44,7 +48,7 @@ class RunControllerTest {
     }
 
     private String startRun() throws Exception {
-        String body = mvc.perform(post("/api/runs"))
+        String body = mvc.perform(post("/api/runs").sessionAttr(Sessions.KEY, LAURA))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.player.row").value(0))
                 .andExpect(jsonPath("$.player.col").value(0))
@@ -59,7 +63,7 @@ class RunControllerTest {
     @Test
     void startAndResumeARun() throws Exception {
         String id = startRun();
-        mvc.perform(get("/api/runs/" + id))
+        mvc.perform(get("/api/runs/" + id).sessionAttr(Sessions.KEY, LAURA))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.remembered").isArray());
     }
@@ -67,7 +71,7 @@ class RunControllerTest {
     @Test
     void aTurnForTheWrongNumberIsAConflict() throws Exception {
         String id = startRun();
-        mvc.perform(post("/api/runs/" + id + "/turns")
+        mvc.perform(post("/api/runs/" + id + "/turns").sessionAttr(Sessions.KEY, LAURA)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"turn\": 7, \"action\": \"NORTH\"}"))
                 .andExpect(status().isConflict())
@@ -78,7 +82,7 @@ class RunControllerTest {
     void aTurnIsPlayedFromTheServersPosition() throws Exception {
         String id = startRun();
         // The entrance is the top-left cell, so north is always a wall and the turn is not used.
-        mvc.perform(post("/api/runs/" + id + "/turns")
+        mvc.perform(post("/api/runs/" + id + "/turns").sessionAttr(Sessions.KEY, LAURA)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"turn\": 0, \"action\": \"NORTH\"}"))
                 .andExpect(status().isOk())
@@ -89,7 +93,7 @@ class RunControllerTest {
     @Test
     void anUnknownActionIsABadRequest() throws Exception {
         String id = startRun();
-        mvc.perform(post("/api/runs/" + id + "/turns")
+        mvc.perform(post("/api/runs/" + id + "/turns").sessionAttr(Sessions.KEY, LAURA)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"turn\": 0, \"action\": \"TELEPORT\"}"))
                 .andExpect(status().isBadRequest());
@@ -97,7 +101,19 @@ class RunControllerTest {
 
     @Test
     void anUnknownRunIsNotFound() throws Exception {
-        mvc.perform(get("/api/runs/no-such-run")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/runs/no-such-run").sessionAttr(Sessions.KEY, LAURA)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void signedOutThereAreNoRuns() throws Exception {
+        mvc.perform(post("/api/runs")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void someoneElsesRunIsNotFound() throws Exception {
+        String id = startRun();
+        mvc.perform(get("/api/runs/" + id).sessionAttr(Sessions.KEY, new SignedIn(2, "bob")))
+                .andExpect(status().isNotFound());
     }
 
     @Test

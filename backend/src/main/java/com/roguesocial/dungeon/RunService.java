@@ -9,7 +9,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.roguesocial.dungeon.RunView.SeenMonster;
@@ -26,20 +25,17 @@ public class RunService {
     private final Bank bank;
     private final PlayerStats stats;
     private final Random random;
-    // Until there is sign-in, every run belongs to this one player.
-    private final String player;
 
     public RunService(FloorGenerator floors, RunStore store, Bank bank, PlayerStats stats,
-            Random random, @Value("${rogue.player}") String player) {
+            Random random) {
         this.floors = floors;
         this.store = store;
         this.bank = bank;
         this.stats = stats;
         this.random = random;
-        this.player = player;
     }
 
-    public RunView start() {
+    public RunView start(String player) {
         Run run = new Run(UUID.randomUUID().toString(), player, stats.lookup(player),
                 floors.generate(random));
         run.see(LineOfSight.visible(run.floor(), run.player()));
@@ -48,8 +44,8 @@ public class RunService {
     }
 
     /** The run as it stands, with the player's whole map, for picking up where they left off. */
-    public RunView resume(String runId) {
-        Run run = find(runId);
+    public RunView resume(String player, String runId) {
+        Run run = find(player, runId);
         synchronized (run) {
             return view(run, true, List.of(), null);
         }
@@ -64,8 +60,8 @@ public class RunService {
      * attacks it, and only then do the monsters beside the player strike back: stepping up to a
      * monster or away from one is safe. Leaving happens before the monsters move.
      */
-    public RunView act(String runId, int turn, Action action) {
-        Run run = find(runId);
+    public RunView act(String player, String runId, int turn, Action action) {
+        Run run = find(player, runId);
         synchronized (run) {
             if (run.status() != Run.Status.ACTIVE) {
                 throw new RunOverException(run.status());
@@ -169,8 +165,11 @@ public class RunService {
         return view(run, false, messages, null);
     }
 
-    private Run find(String runId) {
-        return store.find(runId).orElseThrow(() -> new NoSuchElementException("No run " + runId));
+    /** Another player's run is "no run", the same as one that doesn't exist. */
+    private Run find(String player, String runId) {
+        return store.find(runId)
+                .filter(run -> run.owner().equalsIgnoreCase(player))
+                .orElseThrow(() -> new NoSuchElementException("No run " + runId));
     }
 
     private static RunView view(Run run, boolean withMap, List<String> messages,
