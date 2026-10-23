@@ -22,9 +22,18 @@ class EnemyRepositoryTest {
 
     @Test
     void readsTheSeededEnemies() {
-        assertThat(enemies.byName("bat")).isEqualTo(new EnemyType("bat", 3, 2, 1, 1));
-        assertThat(enemies.byName("scorpion")).isEqualTo(new EnemyType("scorpion", 10, 7, 3, 3));
-        assertThat(enemies.all()).extracting(EnemyType::name).contains("bat", "scorpion");
+        assertThat(enemies.byName("bat")).isEqualTo(new EnemyType("bat", 3, 2, 1, 1, 1));
+        assertThat(enemies.byName("scorpion")).isEqualTo(new EnemyType("scorpion", 10, 7, 3, 3, 1));
+        assertThat(enemies.all()).extracting(EnemyType::name).contains("bat", "scorpion", "rat", "spider", "snake", "wolf",
+                "skeleton", "ghost");
+    }
+
+    @Test
+    void upToLevelLeavesOutHigherLevelEnemies() {
+        assertThat(enemies.upToLevel(1)).extracting(EnemyType::name)
+                .contains("bat", "rat", "scorpion")
+                .doesNotContain("spider", "wolf", "ghost");
+        assertThat(enemies.upToLevel(4)).extracting(EnemyType::name).contains("spider", "wolf");
     }
 
     @Test

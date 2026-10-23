@@ -21,7 +21,7 @@ class RoomCarverTest {
 
     @RepeatedTest(50)
     void keepsTheOuterWallAndEveryCellReachable() {
-        Floor floor = generator.generate(new Random());
+        Floor floor = generator.generate(new Random(), 1);
 
         for (int r = 0; r < floor.rows(); r++) {
             assertThat(floor.isWall(new Pos(r, 0))).isTrue();

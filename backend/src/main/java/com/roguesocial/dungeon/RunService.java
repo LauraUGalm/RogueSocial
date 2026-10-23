@@ -36,8 +36,9 @@ public class RunService {
     }
 
     public RunView start(String player) {
-        Run run = new Run(UUID.randomUUID().toString(), player, stats.lookup(player),
-                floors.generate(random));
+        PlayerStats.Stats playerStats = stats.lookup(player);
+        Run run = new Run(UUID.randomUUID().toString(), player, playerStats,
+                floors.generate(random, playerStats.level()));
         run.see(LineOfSight.visible(run.floor(), run.player()));
         store.save(run);
         return view(run, true, List.of(), null);

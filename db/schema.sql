@@ -53,7 +53,9 @@ CREATE TABLE public.enemies (
     power    integer NOT NULL CONSTRAINT enemies_power_min   CHECK (power >= 0),
     defense  integer NOT NULL CONSTRAINT enemies_defense_min CHECK (defense >= 0),
     -- What the player earns for killing one.
-    exp      integer NOT NULL CONSTRAINT enemies_exp_min     CHECK (exp >= 0)
+    exp       integer NOT NULL CONSTRAINT enemies_exp_min       CHECK (exp >= 0),
+    -- The lowest player level it can appear for.
+    min_level integer NOT NULL CONSTRAINT enemies_min_level_min CHECK (min_level >= 1)
 );
 
 COMMIT;

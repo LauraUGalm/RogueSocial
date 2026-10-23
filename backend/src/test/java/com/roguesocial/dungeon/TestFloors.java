@@ -11,15 +11,14 @@ final class TestFloors {
     }
 
     /** The enemies as seeded in db/seed.sql. */
-    static final EnemyType BAT = new EnemyType("bat", 3, 2, 1, 1);
-    static final EnemyType SCORPION = new EnemyType("scorpion", 10, 7, 3, 3);
+    static final EnemyType BAT = new EnemyType("bat", 3, 2, 1, 1, 1);
+    static final EnemyType SCORPION = new EnemyType("scorpion", 10, 7, 3, 3, 1);
+    static final EnemyType SPIDER = new EnemyType("spider", 13, 8, 4, 5, 2);
 
-    /** A catalog holding just the seeded enemies, so tests need no database. */
-    static final EnemyCatalog ENEMIES = name -> switch (name) {
-        case "bat" -> BAT;
-        case "scorpion" -> SCORPION;
-        default -> throw new java.util.NoSuchElementException(name);
-    };
+    /** A catalog holding a few of the seeded enemies, so tests need no database. */
+    static final EnemyCatalog ENEMIES = level -> java.util.stream.Stream.of(BAT, SCORPION, SPIDER)
+            .filter(e -> e.minLevel() <= level)
+            .toList();
 
     /** The starting player in these tests: level 1, 5 power, 5 defense, 20 health. */
     static final PlayerStats.Stats STATS = new PlayerStats.Stats(1, 5, 5, 20);
@@ -44,7 +43,7 @@ final class TestFloors {
     static FloorGenerator always(java.util.function.Supplier<Floor> make) {
         return new FloorGenerator(null, null) {
             @Override
-            public Floor generate(Random random) {
+            public Floor generate(Random random, int level) {
                 return make.get();
             }
         };

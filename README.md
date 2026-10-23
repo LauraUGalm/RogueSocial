@@ -119,19 +119,29 @@ directly sets how much a player can say.
 - **Decided**: Health stays on screen. The player's is in the status line; each monster in view
   has a bar under it.
 - **Decided**: Walking into a monster attacks it.
-- **Decided**: Monsters' stats live in the `enemies` table: name, health, power, defense and exp. The
-  name is also the sprite's name. Floors read the table when they are built, so changing a row
+- **Decided**: Monsters' stats live in the `enemies` table: name, health, power, defense, exp and
+  min level, the lowest player level it can appear for. The name is also the sprite's name. Floors read the table when they are built, so changing a row
   changes monsters on the next new floor.
-- **Decided**: The first monsters:
+- **Proposed** (2026-10-22, to be adjusted and spaced out more): The monsters so far. Ogre,
+  troll and dragon have sprites but no stats yet.
 
-  | Monster  | Health | Power    | Defense | Exp | Against a level 1 player |
-  |----------|-------:|---------:|--------:|----:|--------------------------|
-  | Bat      | 3      | 2        | 1       | 1   | Hits for 1; dies to one hit of 4 |
-  | Scorpion | 10     | 7        | 3       | 3   | Hits for 2; takes five hits of 2 |
+  | Monster  | Health | Power | Defense | Exp | Min level |
+  |----------|-------:|------:|--------:|----:|----------:|
+  | Bat      | 3      | 2     | 1       | 1   | 1 |
+  | Rat      | 5      | 4     | 2       | 2   | 1 |
+  | Scorpion | 10     | 7     | 3       | 3   | 1 |
+  | Spider   | 13     | 8     | 4       | 5   | 2 |
+  | Snake    | 12     | 7     | 4       | 4   | 2 |
+  | Wolf     | 15     | 10    | 5       | 8   | 4 |
+  | Skeleton | 18     | 9     | 6       | 8   | 4 |
+  | Ghost    | 10     | 11    | 7       | 10  | 5 |
 
 - **Proposed** (as built): A monster that can see the player moves toward them; one that can't
-  wanders. Leaving at the exit happens before the monsters move. A level 1 floor has 4 bats and
-  2 scorpions, at least 12 steps from the entrance.
+  wanders. Leaving at the exit happens before the monsters move. A floor has 6 monsters, at
+  least 12 steps from the entrance, each picked at random from the kinds at or below the
+  player's level, all equally likely.
+- **Open**: Equal odds mean a high-level player still meets plenty of bats. Weighting toward
+  monsters near the player's level, or a max level, would fix that.
 - **Open**: Nothing heals yet, and a scorpion fight costs about 10 of a new player's 20 health,
   so two scorpions can be fatal. Healing, or fewer scorpions on low floors, may be needed.
 

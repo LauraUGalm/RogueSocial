@@ -28,9 +28,8 @@ public class FloorGenerator {
     static final int GOLD_MIN = 5;
     static final int GOLD_MAX = 25;
 
-    // Placeholder numbers until levels are designed (README section 6).
-    static final int BATS = 4;
-    static final int SCORPIONS = 2;
+    // Placeholder number until levels are designed (README section 6).
+    static final int MONSTERS = 6;
     /** Monsters start at least this many steps (ignoring walls) from the entrance. */
     static final int MONSTER_MIN_DISTANCE = 12;
 
@@ -42,7 +41,8 @@ public class FloorGenerator {
         this.enemies = enemies;
     }
 
-    public Floor generate(Random random) {
+    /** A new floor for a player of {@code level}: only enemies that level can meet are placed. */
+    public Floor generate(Random random, int level) {
         Maze maze = mazes.generate(CELL_COLS, CELL_ROWS, random);
         boolean[][] walls = new boolean[maze.rows()][maze.cols()];
         for (int r = 0; r < maze.rows(); r++) {
@@ -77,10 +77,14 @@ public class FloorGenerator {
                         >= MONSTER_MIN_DISTANCE)
                 .toList();
         // Stats are read fresh for each floor, so a change to the enemies table applies next floor.
-        EnemyType bat = enemies.byName("bat");
-        EnemyType scorpion = enemies.byName("scorpion");
-        for (int i = 0; i < BATS + SCORPIONS && i < lairs.size(); i++) {
-            monsters.add(new Monster(i < BATS ? bat : scorpion, lairs.get(i)));
+        // Each monster is any of the kinds the player can meet, all equally likely.
+        List<EnemyType> kinds = enemies.upToLevel(level);
+        if (kinds.isEmpty()) {
+            throw new IllegalStateException(
+                    "No enemies for level " + level + " (is db/seed.sql loaded?)");
+        }
+        for (int i = 0; i < MONSTERS && i < lairs.size(); i++) {
+            monsters.add(new Monster(kinds.get(random.nextInt(kinds.size())), lairs.get(i)));
         }
         return new Floor(walls, entrance, exit, gold, monsters);
     }

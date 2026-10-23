@@ -14,7 +14,7 @@ class FloorGeneratorTest {
 
     @RepeatedTest(10)
     void scattersGoldOnOpenFloorAwayFromEntranceAndExit() {
-        Floor floor = generator.generate(new Random());
+        Floor floor = generator.generate(new Random(), 1);
 
         int piles = 0;
         for (int r = 0; r < floor.rows(); r++) {
@@ -34,9 +34,7 @@ class FloorGeneratorTest {
         assertThat(floor.isWall(floor.entrance())).isFalse();
         assertThat(floor.isWall(floor.exit())).isFalse();
 
-        assertThat(floor.monsters()).hasSize(FloorGenerator.BATS + FloorGenerator.SCORPIONS);
-        assertThat(floor.monsters()).filteredOn(m -> m.type().name().equals("scorpion"))
-                .hasSize(FloorGenerator.SCORPIONS);
+        assertThat(floor.monsters()).hasSize(FloorGenerator.MONSTERS);
         for (Monster m : floor.monsters()) {
             assertThat(floor.isWall(m.pos())).isFalse();
             assertThat(floor.goldAt(m.pos())).isZero();
@@ -45,5 +43,14 @@ class FloorGeneratorTest {
             assertThat(steps).isGreaterThanOrEqualTo(FloorGenerator.MONSTER_MIN_DISTANCE);
         }
         assertThat(floor.monsters()).extracting(Monster::pos).doesNotHaveDuplicates();
+    }
+
+    @RepeatedTest(10)
+    void placesOnlyEnemiesThePlayersLevelCanMeet() {
+        assertThat(generator.generate(new Random(), 1).monsters())
+                .extracting(m -> m.type().name())
+                .doesNotContain("spider");
+        assertThat(generator.generate(new Random(), 2).monsters())
+                .allMatch(m -> m.type().minLevel() <= 2);
     }
 }
