@@ -291,11 +291,93 @@ under Apache 2.0.
   The server takes the gold first, then writes the post, and gives the gold back if the write
   fails.
 
+#### Friends, audiences and the grace period (not built yet)
+
+- **Decided** (2026-10-22): Players have both follows and friends. Following stays one-way and
+  needs no permission. Friendship is two-way: one player sends a request, the other accepts or
+  declines. Unfriending ends it for both.
+- **Decided** (2026-10-22): A post has an audience. A **followers** post is seen by followers and
+  by friends. A **friends** post is seen only by friends, never by followers who aren't friends.
+- **Decided** (2026-10-22): Every post and reply waits 1 minute before it goes live. During that
+  minute only the author sees it, and they can take it back: it is removed and its gold is
+  refunded in full. Nobody else saw it, so there's no harm done. This is the one exception to
+  deletes giving no gold back, and it can't be abused for the same reason: a post nobody saw
+  can't get noticed.
+- **Proposed**: A friendship is one document per pair in a `friendships` collection, with the
+  two user IDs stored in a fixed order (lower first) and a unique index on the pair, so A–B and
+  B–A can't both exist. It records who asked and a status: `pending`, then `accepted`. A declined
+  request is removed.
+- **Proposed**: A post stores `audience` and `liveAt` (its creation time plus 1 minute). Anything
+  that shows posts to other people filters on `liveAt` up to now, and on audience; the author
+  always sees their own.
+- **Proposed**: The feed shows followers posts from everyone you follow or are friends with, and
+  friends posts from your friends. Since anyone can follow anyone, a followers post is in effect
+  public.
+- **Proposed**: A reply goes to the same audience as its post, and can't be liked or replied to
+  until it is live.
+- **Open**: Whether an edit during the grace minute restarts the minute.
+- **Open**: What friendship gives besides friends-only posts (on profiles, or in the game).
+
+#### Profile pictures (not built yet)
+
+- **Decided** (2026-10-22): Profile pictures are stored in MongoDB's GridFS, partly to learn it.
+  GridFS splits a file into chunks: `fs.files` holds one document per file (name, size, type,
+  plus our own fields such as the owner's user ID) and `fs.chunks` holds the pieces. Spring's
+  `GridFsTemplate` stores and reads them.
+- **Decided** (2026-10-22): A player's picture is only shown to their friends (and to them).
+  The server checks the friendship on every request for a picture. There is no public folder of
+  image files, so there is no address to guess: each picture is fetched by the player's name,
+  and someone who isn't a friend gets nothing.
+- **Proposed**: The server shrinks each upload to about 256 x 256 and saves it in one format,
+  so pictures stay around 20 to 50 KB and the original file is never kept. A new upload
+  replaces the old picture.
+- **Open**: What non-friends see in place of the picture, for example next to a followers post:
+  a default picture, or the first letter of the name.
+- **Open**: Which file types are accepted, and the largest upload allowed.
+- **Proposed**: Picture responses tell the browser not to reuse a stored copy without asking the
+  server (`no-cache`), so an unfriended or blocked player's browser can't keep showing the
+  latest picture. What someone saw while they were friends can't be taken back (screenshots).
+
+#### Blocking (not built yet)
+
+- **Decided** (2026-10-22): A player can block another. The reason the picture check matters:
+  if pictures sat at public addresses like `/avatars/claude.png`, someone who was blocked could
+  keep loading that address and watch every new picture without anyone knowing. Because every
+  picture request goes through the server's check, a block takes effect at once, even on an
+  address the blocked player saved.
+- **Proposed**: Blocking ends any friendship and any pending request, removes follows in both
+  directions, hides each player's posts, replies and picture from the other, and stops new
+  follows and friend requests between them. Unblocking undoes none of that: they start over.
+- **Proposed**: Blocks are one document per blocker and blocked player in a `blocks` collection,
+  with a unique index on the pair. Every visibility check asks it in both directions.
+- **Decided** (2026-10-22): A player can see the list of players they have blocked, and unblock
+  from it, in case they blocked the wrong person or have forgiven them. It is on their own
+  profile, under a privacy setting that only they see. It is reached from their side because a
+  blocked player's posts and profile are hidden, so there is nothing of theirs to unblock from.
+- **Open**: Whether the blocked player is told, or just sees the other player vanish.
+
+#### Compared with old Twitter (to talk about after the friends batch)
+
+With friends, audiences, the grace period, blocking and profiles built, the social side is a
+basic old-school Twitter (around 2010), minus a few things.
+
+- **Like old Twitter**: short posts, a feed of who you follow, newest first; replies, likes,
+  editing and deleting; following; profiles with pictures; blocking. Friends-only posts are
+  close to Twitter's protected tweets, but chosen per post rather than for the whole account.
+- **Missing**: retweets; @mentions and notifications (replies, likes, follows, friend requests);
+  hashtags and search; direct messages; a bio and lists of followers and following; trending
+  topics and "who to follow".
+- **Ours, not Twitter's**: posts cost gold earned in the dungeon; friends on top of follows; the
+  1-minute grace period with a full refund (Twitter's undo came years later, and only for paid
+  accounts).
+- **Open**: Notifications would change the feel the most, and friend requests need some way to
+  tell a player one is waiting. Decide how before friend requests are built, or with them.
+
 ## 12. Not designed yet
 
-- What a profile shows.
+- What a profile shows (see Next under "The code so far").
 - Password resets, changing email, and limits on how often someone can guess a password.
-- Combat rules, monster types, gear, and item stats.
+- Gear and item stats. Monster stats are a first pass (section 6, Combat).
 - Whether it is intended that experienced players, who earn more gold per run, become the loudest
   voices on the site.
 
@@ -340,7 +422,8 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - Each turn must carry the current turn number. A replayed or out-of-order turn is rejected.
   Walking into a wall does not use a turn.
 - Positions sent to the browser are relative to the entrance.
-- Bats and scorpions, combat and death, with health on screen (see Combat in section 6).
+- Eight kinds of monster, each with a min level; a floor's monsters are picked from those the
+  player's level allows. Combat and death, with health on screen (see Combat in section 6).
   Runs take the player's level, power, defense and maximum health from `users` when they start.
 - Killing monsters earns exp, banked with the gold on leaving. Banked exp raises the player's
   level, and each level raises their stats (see Experience and levels in section 6).
@@ -356,7 +439,14 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 
 **Next**
 
-1. **Deploy to the Raspberry Pi** (`raspi.local`). The Pi already runs Tomcat on port 8080, with
+1. **Friends, post audiences, the grace period, blocking, and profiles with profile
+   pictures.** Friends with requests, followers and friends-only posts, a 1-minute window to
+   take a post back, blocking, and profile pictures (in GridFS, shown only to friends) are
+   designed in section 11.
+   Still to decide: what a profile shows (section 12).
+2. **Talk about what's missing compared with old Twitter** (section 11): notifications first,
+   then retweets, mentions, search, direct messages and the rest.
+3. **Deploy to the Raspberry Pi** (`raspi.local`). The Pi already runs Tomcat on port 8080, with
    Stonks at `/stonks/`. To decide: build Rogue Social as a WAR for that Tomcat (at, say,
    `/roguesocial/`), or run the Spring Boot jar on its own port. It also needs Postgres and
    MongoDB on the Pi. The Pi is a 4 Model B (8 GB) on the newest Pi OS, with the newest Java,
@@ -366,7 +456,7 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
    version made for the Pi 4, or Mongo on another machine (for example Atlas's free tier). Once
    it's up, add a link to it on the Pi's Tomcat index page (`raspi.local:8080`), next to the one
    for Stonks.
-2. **Buy the domain**, once the game is further along.
+4. **Buy the domain**, once the game is further along.
 
 **Not built yet**
 
@@ -496,7 +586,7 @@ db/
 frontend/src/
 ├── App.jsx       Sign-in, then the Dungeon and Tavern tabs
 ├── SignIn.jsx    Sign in or sign up, and Brad Bradford
-├── Dungeon.jsx   Status line, arrow keys, message log
+├── Dungeon.jsx   Status line, arrow keys and the d-pad, message log
 ├── Tavern.jsx    Banked gold, the post box, following, the feed
 ├── PostCard.jsx  One post: likes, replies, editing
 ├── Composer.jsx  A text box that shows what posting it costs
