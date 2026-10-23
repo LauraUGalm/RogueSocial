@@ -71,6 +71,37 @@ h1 {
   image-rendering: auto;
 }
 
+.dpad {
+  display: grid;
+  grid-template-areas:
+    '.    up   .'
+    'left .    right'
+    '.    down .';
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(3, 56px);
+  gap: 4px;
+  /* No double-tap zoom when tapping quickly. */
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.dpad button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.dpad svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+.dpad button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .log {
   list-style: none;
   margin: 0;

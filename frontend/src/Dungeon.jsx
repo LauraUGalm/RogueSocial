@@ -14,6 +14,16 @@ const KEYS = {
   L: 'LEAVE',
 };
 
+// The on-screen pad under the map, for touch screens.
+// One triangle turned four ways, so every arrow is the same size: arrow characters like ▲ and ◀
+// come out at different sizes depending on the font.
+const PAD = [
+  { action: 'NORTH', turn: 0, area: 'up' },
+  { action: 'WEST', turn: 270, area: 'left' },
+  { action: 'EAST', turn: 90, area: 'right' },
+  { action: 'SOUTH', turn: 180, area: 'down' },
+];
+
 // The browser remembers the run it was playing. The server only resumes it for the player who
 // started it; for anyone else it answers 404 and a new run begins.
 const RUN_KEY = 'rogueSocial.runId';
@@ -180,10 +190,26 @@ export default function Dungeon({ active }) {
 
       <PlayArea state={state} sprites={sprites} />
 
+      <div className="dpad">
+        {PAD.map(({ action, turn, area }) => (
+          <button
+            key={action}
+            style={{ gridArea: area }}
+            aria-label={`Move ${action.toLowerCase()}`}
+            disabled={over}
+            onClick={() => act(action, 'pad')}
+          >
+            <svg viewBox="0 0 24 24" style={{ transform: `rotate(${turn}deg)` }} aria-hidden="true">
+              <path d="M12 5 L20 18 H4 Z" />
+            </svg>
+          </button>
+        ))}
+      </div>
+
       <ul className="log">
         {state.log.length === 0 && (
           <li className="hint">
-            Arrow keys to move; walk into a monster to attack it. Find gold, then find the exit
+            Arrow keys or the pad to move; walk into a monster to attack it. Find gold, then find the exit
             (&gt;) and leave to bank it.
           </li>
         )}

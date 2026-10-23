@@ -342,12 +342,11 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - Closing the tab and coming back resumes the run, with the map so far.
 - Posts, replies, edits, likes, follows and the feed (section 11), stored in MongoDB. Posting
   spends banked gold from Postgres, one per visible symbol; an emoji is one.
+- A d-pad under the map moves the player on touch screens, the same as the arrow keys.
 
 **Next**
 
-1. **Touch controls for the map.** Moving only works with the arrow keys, so the game can't be
-   played on a phone or tablet. This has to come before deploying.
-2. **Deploy to the Raspberry Pi** (`raspi.local`). The Pi already runs Tomcat on port 8080, with
+1. **Deploy to the Raspberry Pi** (`raspi.local`). The Pi already runs Tomcat on port 8080, with
    Stonks at `/stonks/`. To decide: build Rogue Social as a WAR for that Tomcat (at, say,
    `/roguesocial/`), or run the Spring Boot jar on its own port. It also needs Postgres and
    MongoDB on the Pi. The Pi is a 4 Model B (8 GB) on the newest Pi OS, with the newest Java,
@@ -357,7 +356,7 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
    version made for the Pi 4, or Mongo on another machine (for example Atlas's free tier). Once
    it's up, add a link to it on the Pi's Tomcat index page (`raspi.local:8080`), next to the one
    for Stonks.
-3. **Buy the domain**, once the game is further along.
+2. **Buy the domain**, once the game is further along.
 
 **Not built yet**
 
