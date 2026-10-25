@@ -36,8 +36,13 @@ import com.roguesocial.user.UserRepository;
 /**
  * Runs against the local Mongo, in its own database {@code rogue_social_test}, and is skipped
  * when Mongo isn't running. Users and gold come from mocks, so Postgres isn't needed.
+ *
+ * <p>Posts go live at once here, so these tests needn't wait out the grace period.
+ * {@link GracePeriodTest} tests the minute.
  */
-@SpringBootTest(properties = "spring.data.mongodb.uri=mongodb://localhost:27017/rogue_social_test")
+@SpringBootTest(properties = {
+        "spring.data.mongodb.uri=mongodb://localhost:27017/rogue_social_test",
+        "rogue.post-grace=PT0S" })
 @EnabledIf("mongoIsRunning")
 class PostServiceTest {
 

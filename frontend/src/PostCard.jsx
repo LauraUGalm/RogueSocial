@@ -1,6 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Composer from './Composer.jsx';
-import { block, createPost, deletePost, editPost, getReplies, likePost, unlikePost } from './api.js';
+import { block, createPost, deletePost, editPost, getReplies, likePost, takeBack, unlikePost } from './api.js';
+
+// Whole seconds until the post goes live, or 0 once it is (or if it has no liveAt).
+function secondsUntil(iso) {
+  return iso ? Math.max(0, Math.ceil((new Date(iso) - Date.now()) / 1000)) : 0;
+}
 
 function ago(iso) {
   const seconds = Math.max(0, (Date.now() - new Date(iso)) / 1000);
@@ -14,7 +19,7 @@ function ago(iso) {
 // replied to). `me` is {username, bankGold}; `onSpent` tells the Tavern gold left the bank, and
 // `onGone` tells whoever lists this card that the post no longer exists. `onBlocked` tells the
 // Tavern its author was blocked, which changes the whole feed and the friends lists.
-export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked, isReply = false }) {
+export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked, onOpenProfile, isReply = false }) {
   const [post, setPost] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -24,6 +29,16 @@ export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked
 
   const mine = me && post.authorName.toLowerCase() === me.username.toLowerCase();
   const deleted = post.deletedAt != null;
+  const [liveIn, setLiveIn] = useState(() => secondsUntil(post.liveAt));
+  const waiting = liveIn > 0;
+
+  // Counts down once a second until the post is live. Only the author ever sees a post that
+  // isn't live yet, since the server hides it from everyone else.
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => setLiveIn(secondsUntil(post.liveAt)), 1000);
+    return () => clearInterval(timer);
+  }, [waiting, post.liveAt]);
 
   async function toggleLike() {
     setError(null);
@@ -71,6 +86,18 @@ export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked
     }
   }
 
+  // Gives back every bit of gold it cost, edits included. Only in its first minute.
+  async function undo() {
+    setError(null);
+    try {
+      const { goldRefunded } = await takeBack(post.id);
+      onSpent(-goldRefunded);
+      onGone();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function blockAuthor() {
     setConfirmingBlock(false);
     setError(null);
@@ -102,12 +129,15 @@ export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked
   return (
     <article className={isReply ? 'post reply' : 'post'}>
       <header>
-        <strong>{post.authorName}</strong>
+        <button className="name" onClick={() => onOpenProfile(post.authorName)}>
+          {post.authorName}
+        </button>
         <span className="hint">
           {' · '}
           {ago(post.createdAt)}
           {post.editedAt && ' · edited'}
           {post.audience === 'FRIENDS' && !isReply && ' · friends only'}
+          {waiting && <span className="live-in"> · live in: {liveIn}</span>}
         </span>
       </header>
 
@@ -127,12 +157,12 @@ export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked
       )}
 
       <footer>
-        {!deleted && (
+        {!deleted && !waiting && (
           <button className={post.liked ? 'icon liked' : 'icon'} onClick={toggleLike} aria-pressed={post.liked}>
             {post.liked ? '♥' : '♡'} {post.likeCount}
           </button>
         )}
-        {!isReply && (
+        {!isReply && !waiting && (
           <button className="icon" onClick={toggleReplies} aria-expanded={replies != null}>
             💬 {post.replyCount}
           </button>
@@ -142,9 +172,15 @@ export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked
             <button className="icon" onClick={() => setEditing(true)}>
               Edit
             </button>
-            <button className="icon" onClick={() => setConfirming(true)}>
-              Delete
-            </button>
+            {waiting ? (
+              <button className="icon" onClick={undo}>
+                Undo (+{post.paid} gold)
+              </button>
+            ) : (
+              <button className="icon" onClick={() => setConfirming(true)}>
+                Delete
+              </button>
+            )}
           </>
         )}
         {!mine && !confirmingBlock && (
@@ -187,6 +223,7 @@ export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked
               onSpent={onSpent}
               onGone={() => replyGone(r.id)}
               onBlocked={onBlocked}
+              onOpenProfile={onOpenProfile}
               isReply
             />
           ))}

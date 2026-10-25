@@ -53,6 +53,9 @@ public class SocialController {
     public record Posted(PostView post, int goldSpent) {
     }
 
+    public record TakenBack(int goldRefunded) {
+    }
+
     /** Who is signed in, and the gold they have to post with. */
     public record Me(String username, long bankGold) {
     }
@@ -99,6 +102,13 @@ public class SocialController {
         return posts.delete(me.username(), id)
                 .map(tombstone -> ResponseEntity.ok(new PostView(tombstone, false)))
                 .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /** Takes back your post in its first minute, refunding all its gold. 409 once it's live. */
+    @PostMapping("/posts/{id}/take-back")
+    public TakenBack takeBack(SignedIn me,
+            @PathVariable String id) {
+        return new TakenBack(posts.takeBack(me.username(), id));
     }
 
     @GetMapping("/posts/{id}")

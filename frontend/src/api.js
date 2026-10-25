@@ -56,6 +56,8 @@ export const createPost = (text, replyTo = null, audience = null) =>
 export const editPost = (id, text) => call('PATCH', post(id), { text });
 // The post as a tombstone if it had replies, or null when it is gone (204, no body).
 export const deletePost = (id) => call('DELETE', post(id));
+// In a post's first minute only: removes it and answers {goldRefunded}, all it cost.
+export const takeBack = (id) => call('POST', `${post(id)}/take-back`);
 export const getReplies = (id) => call('GET', `${post(id)}/replies`);
 export const likePost = (id) => call('PUT', `${post(id)}/like`);
 export const unlikePost = (id) => call('DELETE', `${post(id)}/like`);
@@ -71,3 +73,27 @@ export const unfriend = (username) => call('DELETE', `/api/friends/${encodeURICo
 export const getBlocked = () => call('GET', '/api/blocks');
 export const block = (username) => call('PUT', `/api/blocks/${encodeURIComponent(username)}`);
 export const unblock = (username) => call('DELETE', `/api/blocks/${encodeURIComponent(username)}`);
+
+// Profiles. Pictures go up as form data, the way a browser sends a file.
+async function upload(method, path, file, fields = {}) {
+  const form = new FormData();
+  form.append('file', file);
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  const res = await fetch(path, { method, body: form });
+  const json = await res.json().catch(() => null);
+  if (res.status === 401) onSignedOut();
+  if (!res.ok) throw new ApiError(res.status, json);
+  return json;
+}
+
+export const getProfile = (username) => call('GET', `/api/profiles/${encodeURIComponent(username)}`);
+// Fields left out stay as they are; an empty string clears one.
+export const saveProfile = (fields) => call('PATCH', '/api/profile', fields);
+export const setPicture = (file) => upload('PUT', '/api/profile/picture', file);
+export const removePicture = () => call('DELETE', '/api/profile/picture');
+// `pictureId` changes with each new picture, so the browser fetches the new one.
+export const pictureUrl = (username, pictureId) =>
+  `/api/profiles/${encodeURIComponent(username)}/picture?v=${encodeURIComponent(pictureId)}`;
+export const addToGallery = (file, audience) => upload('POST', '/api/profile/gallery', file, { audience });
+export const removeFromGallery = (id) => call('DELETE', `/api/profile/gallery/${encodeURIComponent(id)}`);
+export const galleryUrl = (id) => `/api/gallery/${encodeURIComponent(id)}`;

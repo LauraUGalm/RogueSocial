@@ -291,7 +291,7 @@ under Apache 2.0.
   The server takes the gold first, then writes the post, and gives the gold back if the write
   fails.
 
-#### Friends, audiences and the grace period (friends and audiences built; grace period not yet)
+#### Friends, audiences and the grace period (built)
 
 - **Decided** (2026-10-22): Players have both follows and friends. Following stays one-way and
   needs no permission. Friendship is two-way: one player sends a request, the other accepts or
@@ -316,39 +316,83 @@ under Apache 2.0.
   the top of the Tavern, above their friends list.
 - **Proposed** (audience as built 2026-10-25): A post stores `audience` (`FOLLOWERS` or
   `FRIENDS`, chosen with a radio button on the post box) and `liveAt` (its creation time plus 1
-  minute; not built yet). Anything that shows posts to other people filters on `liveAt` up to
+  minute; built 2026-10-25). Anything that shows posts to other people filters on `liveAt` up to
   now, and on audience; the author always sees their own. Posts from before audiences have no
-  `audience` field and count as followers posts, so no migration was needed.
+  `audience` field and count as followers posts, and posts from before the grace period have no
+  `liveAt` and are live, so no migration was needed. The filter is `liveAt $not $gt now`,
+  which also matches a missing field.
+- **Proposed** (as built): During the minute the author sees "live in:" counting down from 60
+  and an Undo button showing the gold it gives back. Undo removes the post and refunds all it
+  cost, edits included, in one step that only matches a post that isn't live yet. After the
+  minute, only Delete is left.
+- **Proposed** (as built): A reply in its first minute still counts in its post's `replyCount`
+  for everyone, though only its author sees it.
 - **Proposed** (as built): The feed shows followers posts from everyone you follow or are friends
   with, and friends posts from your friends. Since anyone can follow anyone, a followers post is
   in effect public.
 - **Proposed** (as built): Someone who isn't a friend asking for a friends post by its ID, its
   replies, or to like or reply to it, is told there's no such post (`404`), so they can't learn
   it exists. Unfriending takes effect at once, since every request checks.
-- **Proposed** (audience as built): A reply goes to the same audience as its post, and can't be
-  liked or replied to until it is live.
-- **Open**: Whether an edit during the grace minute restarts the minute.
+- **Proposed** (as built): A reply goes to the same audience as its post. Nobody, the author
+  included, can like a post or reply to it until it is live.
+- **Decided** (2026-10-25): An edit during the grace minute doesn't restart it. Nobody has seen
+  the post yet, so there's nothing to restart for, and restarting would let a post be kept
+  hidden by editing it every 50 seconds.
 - **Open**: What friendship gives besides friends-only posts (on profiles, or in the game).
 
-#### Profile pictures (not built yet)
+#### Profiles (built 2026-10-25)
+
+- **Decided** (2026-10-25): A profile shows the player's picture, a status line (with how long
+  ago it changed), where they are, when they joined, their level and stats, an About me, and a
+  gallery. Players' names on posts and in friends lists open their profile.
+- **Decided** (2026-10-25): About me, status and location are seen by everyone who isn't
+  blocked, like a Twitter bio, since it's how strangers decide whether to follow or friend you.
+  Limits: about 500 characters, location 50, status 100. They cost no gold.
+- **Decided** (2026-10-25): Each gallery picture has an audience, Followers or Friends, chosen
+  on upload like a post's. A gallery holds 30 pictures. Unlike a post, a Followers picture
+  really needs a follow (or friendship): a stranger looking at the profile sees none of the
+  gallery. A followers post, by contrast, can be opened by anyone who has its id.
+- **Proposed** (as built): One `profiles` document per player, whose `_id` is their user ID
+  rather than an ObjectId, so looking one up uses the index Mongo always keeps on `_id`.
+- **Proposed** (as built): Gallery pictures are GridFS files like the profile picture, told
+  apart by `metadata.kind` (`profile` or `gallery`), with `metadata.audience` on gallery ones.
+  An index on `metadata.ownerId, metadata.kind` finds a player's pictures.
+- **Proposed** (as built): The profile shows what the viewer can see: only the gallery pictures
+  their audience allows. Across a block, either way, the
+  profile, picture and gallery answer that there's no such player.
+- **Open**: The old `GET /api/users/{username}` still shows anyone's level and stats, even across
+  a block. The app doesn't use it; it could go, or check blocks.
+- **Open**: Photos from phones can come out sideways: the server doesn't yet read the EXIF
+  orientation that says which way up a photo was taken.
+- **Open**: A player's own posts on their profile, and lists of their followers and friends.
+
+#### Profile pictures (built 2026-10-25)
 
 - **Decided** (2026-10-22): Profile pictures are stored in MongoDB's GridFS, partly to learn it.
   GridFS splits a file into chunks: `fs.files` holds one document per file (name, size, type,
   plus our own fields such as the owner's user ID) and `fs.chunks` holds the pieces. Spring's
   `GridFsTemplate` stores and reads them.
-- **Decided** (2026-10-22): A player's picture is only shown to their friends (and to them).
-  The server checks the friendship on every request for a picture. There is no public folder of
-  image files, so there is no address to guess: each picture is fetched by the player's name,
-  and someone who isn't a friend gets nothing.
-- **Proposed**: The server shrinks each upload to about 256 x 256 and saves it in one format,
-  so pictures stay around 20 to 50 KB and the original file is never kept. A new upload
-  replaces the old picture.
-- **Open**: What non-friends see in place of the picture, for example next to a followers post:
-  a default picture, or the first letter of the name.
-- **Open**: Which file types are accepted, and the largest upload allowed.
-- **Proposed**: Picture responses tell the browser not to reuse a stored copy without asking the
-  server (`no-cache`), so an unfriended or blocked player's browser can't keep showing the
+- **Decided** (2026-10-22, changed 2026-10-25): A player's profile picture is shown to
+  everyone except across a block, like the rest of the profile. (It was first friends only,
+  then friends and followers.) The server checks on every request for a picture. There is no
+  public folder of image files, so there is no address to guess: each picture is fetched by
+  the player's name or the picture's id, and a blocked player gets nothing.
+- **Proposed** (as built): The server cuts each upload to a 256 x 256 square from its middle
+  and saves it as a JPEG, so pictures stay around 20 to 50 KB and the original file is never
+  kept (nor the location data phone cameras put in photos). A new upload is stored before the
+  old picture is removed, so there's never a moment with neither. Gallery pictures are shrunk
+  to fit within 1024 x 1024, keeping their shape.
+- **Decided** (2026-10-25): A player with no picture is shown as the first letter of their
+  name. Pictures aren't shown next to posts yet.
+- **Decided** (2026-10-25): JPEG, PNG and WebP are accepted (WebP through the TwelveMonkeys
+  ImageIO plugin), up to 10 MB. GIFs aren't, since only the first frame would be kept. The
+  server reads a picture's size from its header and refuses one over 50 million pixels before
+  decoding it, since a small file can claim to be enormous.
+- **Proposed** (as built): Picture responses tell the browser not to reuse a stored copy without asking the
+  server (`no-cache`), so an unfollowing, unfriended or blocked player's browser can't keep showing the
   latest picture. What someone saw while they were friends can't be taken back (screenshots).
+  Each response carries an `ETag` (the file's id), so asking again for an unchanged picture
+  gets a short `304` instead of the bytes, after the server has checked who's asking.
 
 #### Blocking (built 2026-10-25)
 
@@ -398,7 +442,6 @@ basic old-school Twitter (around 2010), minus a few things.
 
 ## 12. Not designed yet
 
-- What a profile shows (see Next under "The code so far").
 - Password resets, changing email, and limits on how often someone can guess a password.
 - Gear and item stats. Monster stats are a first pass (section 6, Combat).
 - Whether it is intended that experienced players, who earn more gold per run, become the loudest
@@ -460,15 +503,15 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
   spends banked gold from Postgres, one per visible symbol; an emoji is one.
 - Friends: requests, accepting, declining and unfriending, in the Tavern. Friends' posts are in
   the feed. Posts are for followers or for friends only. Blocking, with a list to unblock from.
-  The grace period and profiles are not built yet.
+  Each post and reply waits a minute before others see it, and can be taken back for all its
+  gold until then. Profiles: picture, status, location, stats, About me and a gallery, with
+  pictures in GridFS.
 - A d-pad under the map moves the player on touch screens, the same as the arrow keys.
 
 **Next**
 
-1. **The grace period, and profiles with profile pictures.** Friends, post audiences and
-   blocking are built. The 1-minute window to take a post back and profile pictures (in GridFS,
-   shown only to friends) are designed in section 11.
-   Still to decide: what a profile shows (section 12).
+1. **Finish profiles** (section 11, open items): a player's own posts on their profile,
+   followers and friends lists, sideways phone photos, and the old `/api/users/{username}`.
 2. **Talk about what's missing compared with old Twitter** (section 11): notifications first,
    then retweets, mentions, search, direct messages and the rest.
 3. **Deploy to the Raspberry Pi** (`raspi.local`). The Pi already runs Tomcat on port 8080, with
@@ -492,7 +535,6 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - There's no way to reset a forgotten password except `db/set_password.sql`, and nothing slows
   down repeated wrong guesses.
 - Silver is not built.
-- There is no profile page.
 - Death ends the run and loses the gold carried; the tombstone and recovery runs (section 4) are
   not built. Killing monsters gives exp but no drops.
 - No gear, healing, the overview map, or the rate limit. The player's level and exp aren't shown
@@ -578,6 +620,7 @@ as the signed-in player with it. Someone else's run is `404`.
 | `POST /api/posts` with `{"text": "...", "replyTo": null, "audience": "FOLLOWERS"}` | Posts, or replies when `replyTo` is a post's `id`. `audience` is `FOLLOWERS` (the default) or `FRIENDS`; a reply takes its post's. `201` with `{post, goldSpent}`. `402` without the gold, `400` for a blank post or a reply to a reply. |
 | `PATCH /api/posts/{id}` with `{"text": "..."}` | Edits your post, paying for any new symbols. `403` if it isn't yours. |
 | `DELETE /api/posts/{id}` | Deletes your post, refunding nothing. `204` if it is gone, or `200` with the tombstone if it has replies. `403` if it isn't yours. |
+| `POST /api/posts/{id}/take-back` | In a post's first minute, removes it and refunds all it cost: `{goldRefunded}`. `409` once it's live, `403` if it isn't yours. |
 | `GET /api/posts/{id}` | One post. `404` for a friends post if you aren't the author's friend, or across a block either way, here and for its replies and likes. |
 | `GET /api/posts/{id}/replies` | Its replies, oldest first (up to 100). |
 | `PUT` / `DELETE /api/posts/{id}/like` | Likes or unlikes; both are safe to repeat. Returns the post. |
@@ -588,10 +631,17 @@ as the signed-in player with it. Someone else's run is `404`.
 | `GET /api/blocks` | Usernames you have blocked. Only you see this. |
 | `PUT /api/blocks/{username}` | Blocks them: ends any friendship, request and follows between you, and hides each of you from the other. Safe to repeat. Returns your list. |
 | `DELETE /api/blocks/{username}` | Unblocks them. Nothing the block ended comes back. Returns your list. |
+| `GET /api/profiles/{username}` | `{username, mine, joined, level, power, defense, maxHealth, about, location, status, statusAt, pictureId, relation, following, followsYou, gallery}`. `pictureId` is null if they have no picture; `relation` is `FRIENDS`, `ASKED`, `ASKED_YOU` or `NONE`; `gallery` is `[{id, audience, uploadedAt}]`, only what you may see. `404` across a block. |
+| `PATCH /api/profile` with `{"about": "...", "location": "...", "status": "..."}` | Changes yours. A field left out stays; an empty one is cleared. Returns your profile. |
+| `PUT /api/profile/picture` (form data, `file`) / `DELETE /api/profile/picture` | Sets or removes your picture. `204`. `400` if it isn't a JPEG, PNG or WebP, `413` over 10 MB. |
+| `GET /api/profiles/{username}/picture` | The picture, a JPEG. `404` across a block. |
+| `POST /api/profile/gallery` (form data, `file` and `audience`) | Adds to your gallery. `201` with `{id, audience, uploadedAt}`. `400` when it holds 30. |
+| `DELETE /api/profile/gallery/{id}` | Removes one of yours. `204`. |
+| `GET /api/gallery/{id}` | A gallery picture. `404` unless you're friends, or follow them and it's a Followers picture (or it's yours), and across a block. |
 | `GET /api/feed?before={id}` | 20 posts from you, the people you follow and your friends, newest first. Pass the last `id` for the next page. |
 
 A post is `{id, authorId, authorName, text, paid, createdAt, editedAt, deletedAt, replyTo,
-likeCount, replyCount, audience, liked}`, where `liked` says whether you have liked it. A tombstone has
+likeCount, replyCount, audience, liveAt, liked}`, where `liked` says whether you have liked it. A tombstone has
 `deletedAt` set and `text` null; liking, editing or replying to it gets `400`. `503` means a database is down.
 
 ### Layout
@@ -602,12 +652,13 @@ backend/src/main/java/com/roguesocial/
 ├── dungeon/   Floor, FloorGenerator, RoomCarver, LineOfSight, Run, RunService, RunStore, Bank,
 │              Monster, EnemyType, EnemyCatalog, MonsterTurns, Combat, PlayerStats
 ├── enemy/     EnemyRepository (the enemies table)
-├── social/    Post, Follow, Like, Friendship, Block (Mongo documents), PostCost, PostService,
-│              FollowService, FriendService, BlockService, SocialIndexes, Purse (gold for posts, implemented by UserBank)
+├── social/    Post, Follow, Like, Friendship, Block, Profile (Mongo documents), PostCost,
+│              PostService, FollowService, FriendService, BlockService, ProfileService,
+│              Pictures (shrinks uploads), SocialIndexes, Purse (gold for posts, implemented by UserBank)
 ├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), Levels (the exp
 │              curve and what a level adds), UserController,
 │              Accounts and PasswordRules (sign-up, bcrypt), SessionController and Sessions
-└── web/       REST API (runs, debug, social), SignedInResolver (who is asking), and serves the
+└── web/       REST API (runs, debug, social, profiles), SignedInResolver (who is asking), and serves the
                React app at /play
 db/
 ├── schema.sql     The whole current database, for a new empty database
@@ -615,13 +666,14 @@ db/
 ├── set_password.sql  Sets a player's password from psql
 └── migrations/    Numbered change scripts for an existing database
 frontend/src/
-├── App.jsx       Sign-in, then the Dungeon and Tavern tabs
+├── App.jsx       Sign-in, then the Dungeon, Tavern and Profile tabs
 ├── SignIn.jsx    Sign in or sign up, and Brad Bradford
 ├── Dungeon.jsx   Status line, arrow keys and the d-pad, message log
 ├── Tavern.jsx    Banked gold, the post box, the feed
 ├── Friends.jsx   Friend requests waiting on you, one box to follow, friend or block by name,
 │                 your friends, who you've blocked
 ├── PostCard.jsx  One post: likes, replies, editing, blocking its author
+├── Profile.jsx   A profile: picture, status, stats, about, gallery; editing your own
 ├── Composer.jsx  A text box that shows what posting it costs
 ├── cost.js       The cost of a post, counted the way the server counts it
 ├── PlayArea.jsx  Draws the view around the player from the sprite sheet

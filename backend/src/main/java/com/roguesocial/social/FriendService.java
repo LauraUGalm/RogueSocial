@@ -113,6 +113,19 @@ public class FriendService {
                 .toList();
     }
 
+    /** Where {@code me} stands with {@code them}, as the profile page shows it. */
+    public enum Relation {
+        FRIENDS, ASKED, ASKED_YOU, NONE
+    }
+
+    Relation relation(long me, long them) {
+        indexes.ensure();
+        Friendship f = mongo.findOne(query(pair(me, them)), Friendship.class);
+        return f == null ? Relation.NONE
+                : f.status() == Status.ACCEPTED ? Relation.FRIENDS
+                : f.requesterId() == me ? Relation.ASKED : Relation.ASKED_YOU;
+    }
+
     public boolean areFriends(long a, long b) {
         indexes.ensure();
         return mongo.exists(query(pair(a, b).and("status").is(Status.ACCEPTED)), Friendship.class);

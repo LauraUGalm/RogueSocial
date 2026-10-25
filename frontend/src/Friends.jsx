@@ -12,7 +12,7 @@ const LABELS = {
 // friends, the requests you sent, and who you've blocked. There are no notifications yet, so
 // requests waiting on you are shown first, where you'll see them. `onChange` tells the Tavern who
 // you see posts from has changed.
-export default function Friends({ onChange }) {
+export default function Friends({ onChange, onOpenProfile }) {
   const [lists, setLists] = useState(null);
   const [blocked, setBlocked] = useState([]);
   const [name, setName] = useState('');
@@ -93,7 +93,10 @@ export default function Friends({ onChange }) {
       {lists.incoming.map((who) => (
         <div key={who} className="friend-row request">
           <span>
-            <strong>{who}</strong> wants to be friends
+            <button className="name" onClick={() => onOpenProfile(who)}>
+              {who}
+            </button>{' '}
+            wants to be friends
           </span>
           <button className="quiet" onClick={() => act(befriend, who)}>
             Accept
@@ -143,7 +146,11 @@ export default function Friends({ onChange }) {
         {lists.friends.length === 0 && <p className="hint">No friends yet.</p>}
         {lists.friends.map((who) => (
           <div key={who} className="friend-row">
-            <span>{who}</span>
+            <span>
+              <button className="name" onClick={() => onOpenProfile(who)}>
+                {who}
+              </button>
+            </span>
             <button className="icon" onClick={() => act(unfriend, who)}>
               Unfriend
             </button>

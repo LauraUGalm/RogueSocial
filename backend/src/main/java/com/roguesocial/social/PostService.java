@@ -3,6 +3,7 @@ package com.roguesocial.social;
 import static org.springframework.data.mongodb.core.query.Criteria.where;
 import static org.springframework.data.mongodb.core.query.Query.query;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
@@ -13,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.bson.types.ObjectId;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
@@ -57,9 +59,12 @@ public class PostService {
     private final FollowService follows;
     private final FriendService friends;
     private final BlockService blocks;
+    /** How long a new post waits before others see it. A minute, except in most tests. */
+    private final Duration grace;
 
     public PostService(MongoTemplate mongo, SocialIndexes indexes, UserRepository users, Purse purse,
-            FollowService follows, FriendService friends, BlockService blocks) {
+            FollowService follows, FriendService friends, BlockService blocks,
+            @Value("${rogue.post-grace:PT1M}") Duration grace) {
         this.mongo = mongo;
         this.indexes = indexes;
         this.users = users;
@@ -67,6 +72,7 @@ public class PostService {
         this.follows = follows;
         this.friends = friends;
         this.blocks = blocks;
+        this.grace = grace;
     }
 
     /**
@@ -87,14 +93,16 @@ public class PostService {
             }
             checkCanSee(author, parent);
             notDeleted(parent);
+            notLiveYet(parent);
             audience = parent.audience() == null ? Audience.FOLLOWERS : parent.audience();
         }
 
         purse.spendGold(author.username(), cost);
         Post saved;
+        Instant now = now();
         try {
-            saved = mongo.insert(new Post(null, author.userId(), author.username(), text, cost, now(),
-                    null, null, replyTo, 0, 0, audience));
+            saved = mongo.insert(new Post(null, author.userId(), author.username(), text, cost, now,
+                    null, null, replyTo, 0, 0, audience, now.plus(grace)));
         } catch (RuntimeException e) {
             purse.refundGold(author.username(), cost);
             throw e;
@@ -137,7 +145,37 @@ public class PostService {
         }
         return new Posted(new Post(post.id(), post.authorId(), post.authorName(), text,
                 post.paid() + extra, post.createdAt(), editedAt, null, post.replyTo(), post.likeCount(),
-                post.replyCount(), post.audience()), extra);
+                post.replyCount(), post.audience(), post.liveAt()), extra);
+    }
+
+    /**
+     * Takes back your post in its first minute, before anyone else has seen it, and refunds all
+     * the gold it cost, edits included. Nobody saw it, so nothing was said.
+     *
+     * <p>The check and the removal are one step: "remove it if it's still not live". So a post
+     * going live at that moment either goes back in full or stays up, never half of each. No one
+     * else can like it or reply to it before it's live, so there's nothing else to tidy up.
+     *
+     * @return the gold refunded
+     */
+    public int takeBack(String username, String postId) {
+        indexes.ensure();
+        User author = user(username);
+        Post post = find(postId);
+        if (post.authorId() != author.userId()) {
+            throw new NotYourPostException();
+        }
+        // findAndRemove hands back the document as it was when removed, so an edit made since
+        // the read above (which cost more) is refunded too.
+        Post removed = mongo.findAndRemove(query(where("_id").is(post.id()).and("liveAt").gt(now())), Post.class);
+        if (removed == null) {
+            throw new IllegalStateException("It's already live; delete it instead");
+        }
+        purse.refundGold(author.username(), removed.paid());
+        if (removed.replyTo() != null) {
+            mongo.updateFirst(byId(removed.replyTo()), new Update().inc("replyCount", -1), Post.class);
+        }
+        return removed.paid();
     }
 
     /**
@@ -198,12 +236,15 @@ public class PostService {
 
     /**
      * Oldest first, so a conversation reads top to bottom. Leaves out replies from anyone this
-     * player has blocked or been blocked by. The post's {@code replyCount} still counts them.
+     * player has blocked or been blocked by, and other people's replies still in their first
+     * minute. The post's {@code replyCount} still counts them.
      */
     public List<Post> replies(String username, String postId) {
         find(username, postId);
-        Set<Long> hidden = blocks.hiddenFrom(user(username).userId());
-        return mongo.find(query(where("replyTo").is(postId).and("authorId").nin(hidden))
+        User me = user(username);
+        Set<Long> hidden = blocks.hiddenFrom(me.userId());
+        return mongo.find(query(where("replyTo").is(postId).and("authorId").nin(hidden)
+                .orOperator(where("authorId").is(me.userId()), live()))
                 .with(Sort.by(Direction.ASC, "_id"))
                 .limit(MAX_REPLIES), Post.class);
     }
@@ -215,6 +256,7 @@ public class PostService {
         Post post = find(postId);
         checkCanSee(me, post);
         notDeleted(post);
+        notLiveYet(post);
         try {
             mongo.insert(new Like(null, post.id(), me.userId(), now()));
         } catch (DuplicateKeyException alreadyLiked) {
@@ -280,8 +322,8 @@ public class PostService {
         // out of the document, so that's every top-level post.
         Criteria criteria = new Criteria().orOperator(
                 where("authorId").is(me.userId()),
-                where("authorId").in(followed).and("audience").ne(Audience.FRIENDS),
-                where("authorId").in(friendIds).and("audience").is(Audience.FRIENDS))
+                where("authorId").in(followed).and("audience").ne(Audience.FRIENDS).andOperator(live()),
+                where("authorId").in(friendIds).and("audience").is(Audience.FRIENDS).andOperator(live()))
                 .and("replyTo").is(null);
         if (before != null) {
             if (!ObjectId.isValid(before)) {
@@ -314,9 +356,27 @@ public class PostService {
         Post top = post.replyTo() == null ? post : find(post.replyTo());
         boolean hidden = top.friendsOnly() && top.authorId() != viewer.userId()
                 && !friends.areFriends(viewer.userId(), top.authorId());
-        if (hidden || blocks.between(viewer.userId(), top.authorId())
+        boolean waiting = (!top.isLive(now()) && top.authorId() != viewer.userId())
+                || (!post.isLive(now()) && post.authorId() != viewer.userId());
+        if (hidden || waiting || blocks.between(viewer.userId(), top.authorId())
                 || blocks.between(viewer.userId(), post.authorId())) {
             throw new NoSuchElementException("No post " + post.id());
+        }
+    }
+
+    /**
+     * Posts that others can see: {@code liveAt} is not after now. "Not after" rather than "at or
+     * before", because {@code $not} also matches posts with no {@code liveAt} at all, from before
+     * the grace period, the same trick as {@code audience $ne FRIENDS}.
+     */
+    private static Criteria live() {
+        return where("liveAt").not().gt(now());
+    }
+
+    /** Nobody, the author included, can like a post or reply to it in its first minute. */
+    private static void notLiveYet(Post post) {
+        if (!post.isLive(now())) {
+            throw new IllegalArgumentException("That post isn't live yet");
         }
     }
 

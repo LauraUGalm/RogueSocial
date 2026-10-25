@@ -55,6 +55,12 @@ public class FollowService {
                 Follow.class);
     }
 
+    boolean isFollowing(long followerId, long followeeId) {
+        indexes.ensure();
+        return mongo.exists(query(where("followerId").is(followerId).and("followeeId").is(followeeId)),
+                Follow.class);
+    }
+
     /** The user IDs this player follows. */
     List<Long> following(long userId) {
         indexes.ensure();

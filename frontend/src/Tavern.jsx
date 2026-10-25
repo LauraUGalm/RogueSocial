@@ -8,7 +8,7 @@ import { createPost, getFeed, getMe } from './api.js';
 const PAGE = 20;
 
 // The social tab: your banked gold, a box to post, friends, following people, and the feed.
-export default function Tavern({ active }) {
+export default function Tavern({ active, onOpenProfile }) {
   const [me, setMe] = useState(null);
   const [posts, setPosts] = useState(null);
   const [more, setMore] = useState(false);
@@ -70,7 +70,7 @@ export default function Tavern({ active }) {
 
       <Composer gold={me.bankGold} placeholder="What did you find down there?" submitLabel="Post" chooseAudience onSubmit={publish} />
 
-      <Friends key={blocks} onChange={refresh} />
+      <Friends key={blocks} onChange={refresh} onOpenProfile={onOpenProfile} />
 
       {posts.length === 0 && (
         <p className="hint">Nothing here yet. Post something, or follow someone to see their posts.</p>
@@ -81,6 +81,7 @@ export default function Tavern({ active }) {
           post={p}
           me={me}
           onSpent={spent}
+          onOpenProfile={onOpenProfile}
           onGone={() => setPosts((ps) => ps.filter((x) => x.id !== p.id))}
           onBlocked={() => {
             setBlocks((n) => n + 1);

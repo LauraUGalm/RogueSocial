@@ -28,6 +28,9 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
  * @param replyCount the same, for replies
  * @param audience   who may see it. A reply has its post's audience. Posts from before
  *                   audiences have none, which counts as {@link Audience#FOLLOWERS}
+ * @param liveAt     when others can see it: a minute after it was posted. Until then only the
+ *                   author sees it, and can take it back for all its gold. Posts from before the
+ *                   grace period have none, and are live
  */
 @Document("posts")
 public record Post(
@@ -42,7 +45,8 @@ public record Post(
         @Field(targetType = FieldType.OBJECT_ID) String replyTo,
         int likeCount,
         int replyCount,
-        Audience audience) {
+        Audience audience,
+        Instant liveAt) {
 
     /**
      * Stored as the name. {@code FOLLOWERS} posts are seen by followers and friends, so in effect
@@ -54,5 +58,9 @@ public record Post(
 
     public boolean friendsOnly() {
         return audience == Audience.FRIENDS;
+    }
+
+    public boolean isLive(Instant now) {
+        return liveAt == null || !liveAt.isAfter(now);
     }
 }

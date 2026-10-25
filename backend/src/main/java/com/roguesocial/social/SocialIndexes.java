@@ -56,6 +56,10 @@ class SocialIndexes {
                     new Index().on("blockerId", Direction.ASC).on("blockedId", Direction.ASC).unique());
             // Who blocked me.
             mongo.indexOps(Block.class).createIndex(new Index().on("blockedId", Direction.ASC));
+            // A player's pictures in GridFS, which Spring keeps in fs.files. Our own fields go
+            // in each file's metadata, and can be indexed like any other field.
+            mongo.indexOps("fs.files").createIndex(
+                    new Index().on("metadata.ownerId", Direction.ASC).on("metadata.kind", Direction.ASC));
             created = true;
         }
     }
