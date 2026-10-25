@@ -50,7 +50,9 @@ const post = (id) => `/api/posts/${encodeURIComponent(id)}`;
 export const getMe = () => call('GET', '/api/me');
 export const getFeed = (before) =>
   call('GET', before ? `/api/feed?before=${encodeURIComponent(before)}` : '/api/feed');
-export const createPost = (text, replyTo = null) => call('POST', '/api/posts', { text, replyTo });
+// `audience` is FOLLOWERS or FRIENDS. A reply goes to its post's audience, so it leaves it out.
+export const createPost = (text, replyTo = null, audience = null) =>
+  call('POST', '/api/posts', { text, replyTo, audience });
 export const editPost = (id, text) => call('PATCH', post(id), { text });
 // The post as a tombstone if it had replies, or null when it is gone (204, no body).
 export const deletePost = (id) => call('DELETE', post(id));
@@ -59,3 +61,13 @@ export const likePost = (id) => call('PUT', `${post(id)}/like`);
 export const unlikePost = (id) => call('DELETE', `${post(id)}/like`);
 export const follow = (username) => call('PUT', `/api/follows/${encodeURIComponent(username)}`);
 export const unfollow = (username) => call('DELETE', `/api/follows/${encodeURIComponent(username)}`);
+// Each of these answers with your lists as they are now: {friends, incoming, outgoing}.
+export const getFriends = () => call('GET', '/api/friends');
+// Sends a request, or accepts theirs.
+export const befriend = (username) => call('PUT', `/api/friends/${encodeURIComponent(username)}`);
+// Unfriends, declines their request, or takes back yours.
+export const unfriend = (username) => call('DELETE', `/api/friends/${encodeURIComponent(username)}`);
+// Who you've blocked, as a list of usernames. Blocking and unblocking answer with the new list.
+export const getBlocked = () => call('GET', '/api/blocks');
+export const block = (username) => call('PUT', `/api/blocks/${encodeURIComponent(username)}`);
+export const unblock = (username) => call('DELETE', `/api/blocks/${encodeURIComponent(username)}`);

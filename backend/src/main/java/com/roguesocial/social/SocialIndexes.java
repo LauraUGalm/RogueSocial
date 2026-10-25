@@ -45,6 +45,17 @@ class SocialIndexes {
             // One like per person per post.
             mongo.indexOps(Like.class).createIndex(
                     new Index().on("postId", Direction.ASC).on("userId", Direction.ASC).unique());
+            // One document per pair of players, whichever of them asked. Also finds a player's
+            // friendships where they are the lower ID.
+            mongo.indexOps(Friendship.class).createIndex(
+                    new Index().on("lowId", Direction.ASC).on("highId", Direction.ASC).unique());
+            // ...and where they are the higher one.
+            mongo.indexOps(Friendship.class).createIndex(new Index().on("highId", Direction.ASC));
+            // Who I blocked. Unique, so blocking twice is impossible.
+            mongo.indexOps(Block.class).createIndex(
+                    new Index().on("blockerId", Direction.ASC).on("blockedId", Direction.ASC).unique());
+            // Who blocked me.
+            mongo.indexOps(Block.class).createIndex(new Index().on("blockedId", Direction.ASC));
             created = true;
         }
     }

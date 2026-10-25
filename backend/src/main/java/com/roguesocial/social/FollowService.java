@@ -22,11 +22,13 @@ public class FollowService {
     private final MongoTemplate mongo;
     private final SocialIndexes indexes;
     private final UserRepository users;
+    private final BlockService blocks;
 
-    public FollowService(MongoTemplate mongo, SocialIndexes indexes, UserRepository users) {
+    public FollowService(MongoTemplate mongo, SocialIndexes indexes, UserRepository users, BlockService blocks) {
         this.mongo = mongo;
         this.indexes = indexes;
         this.users = users;
+        this.blocks = blocks;
     }
 
     public void follow(String username, String target) {
@@ -36,6 +38,7 @@ public class FollowService {
         if (me.userId() == them.userId()) {
             throw new IllegalArgumentException("You can't follow yourself");
         }
+        blocks.checkNotBlocked(me, them);
         try {
             mongo.insert(new Follow(null, me.userId(), them.userId(),
                     Instant.now().truncatedTo(ChronoUnit.MILLIS)));

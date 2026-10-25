@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Composer from './Composer.jsx';
-import { createPost, deletePost, editPost, getReplies, likePost, unlikePost } from './api.js';
+import { block, createPost, deletePost, editPost, getReplies, likePost, unlikePost } from './api.js';
 
 function ago(iso) {
   const seconds = Math.max(0, (Date.now() - new Date(iso)) / 1000);
@@ -12,11 +12,13 @@ function ago(iso) {
 
 // One post, or one reply when `isReply` is set (replies are one level deep, so they can't be
 // replied to). `me` is {username, bankGold}; `onSpent` tells the Tavern gold left the bank, and
-// `onGone` tells whoever lists this card that the post no longer exists.
-export default function PostCard({ post: initial, me, onSpent, onGone, isReply = false }) {
+// `onGone` tells whoever lists this card that the post no longer exists. `onBlocked` tells the
+// Tavern its author was blocked, which changes the whole feed and the friends lists.
+export default function PostCard({ post: initial, me, onSpent, onGone, onBlocked, isReply = false }) {
   const [post, setPost] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingBlock, setConfirmingBlock] = useState(false);
   const [replies, setReplies] = useState(null); // null until opened
   const [error, setError] = useState(null);
 
@@ -69,6 +71,17 @@ export default function PostCard({ post: initial, me, onSpent, onGone, isReply =
     }
   }
 
+  async function blockAuthor() {
+    setConfirmingBlock(false);
+    setError(null);
+    try {
+      await block(post.authorName);
+      onBlocked();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   // The server removes a tombstone along with its last reply, so this card goes too.
   function replyGone(id) {
     setReplies(replies.filter((r) => r.id !== id));
@@ -94,6 +107,7 @@ export default function PostCard({ post: initial, me, onSpent, onGone, isReply =
           {' · '}
           {ago(post.createdAt)}
           {post.editedAt && ' · edited'}
+          {post.audience === 'FRIENDS' && !isReply && ' · friends only'}
         </span>
       </header>
 
@@ -133,6 +147,22 @@ export default function PostCard({ post: initial, me, onSpent, onGone, isReply =
             </button>
           </>
         )}
+        {!mine && !confirmingBlock && (
+          <button className="icon" onClick={() => setConfirmingBlock(true)}>
+            Block
+          </button>
+        )}
+        {confirmingBlock && (
+          <span className="confirm">
+            Block {post.authorName}? This ends any friendship and follows between you.
+            <button className="icon danger" onClick={blockAuthor}>
+              Block
+            </button>
+            <button className="icon" onClick={() => setConfirmingBlock(false)}>
+              Cancel
+            </button>
+          </span>
+        )}
         {confirming && (
           <span className="confirm">
             Delete for good? The gold stays spent.
@@ -150,7 +180,15 @@ export default function PostCard({ post: initial, me, onSpent, onGone, isReply =
       {replies && (
         <div className="replies">
           {replies.map((r) => (
-            <PostCard key={r.id} post={r} me={me} onSpent={onSpent} onGone={() => replyGone(r.id)} isReply />
+            <PostCard
+              key={r.id}
+              post={r}
+              me={me}
+              onSpent={onSpent}
+              onGone={() => replyGone(r.id)}
+              onBlocked={onBlocked}
+              isReply
+            />
           ))}
           {!deleted && <Composer gold={me?.bankGold} placeholder="Reply…" submitLabel="Reply" onSubmit={reply} />}
         </div>

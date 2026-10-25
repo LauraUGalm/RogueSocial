@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import Composer from './Composer.jsx';
+import Friends from './Friends.jsx';
 import PostCard from './PostCard.jsx';
-import { createPost, follow, getFeed, getMe, unfollow } from './api.js';
+import { createPost, getFeed, getMe } from './api.js';
 
 // The server sends 20 posts a page; fewer means there are no older ones.
 const PAGE = 20;
 
-// The social tab: your banked gold, a box to post, the feed, and following people.
+// The social tab: your banked gold, a box to post, friends, following people, and the feed.
 export default function Tavern({ active }) {
   const [me, setMe] = useState(null);
   const [posts, setPosts] = useState(null);
   const [more, setMore] = useState(false);
   const [error, setError] = useState(null);
+  // Bumped after blocking from a post, so the friends lists load again.
+  const [blocks, setBlocks] = useState(0);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -42,8 +45,8 @@ export default function Tavern({ active }) {
 
   const spent = useCallback((gold) => setMe((m) => ({ ...m, bankGold: m.bankGold - gold })), []);
 
-  async function publish(text) {
-    const { post, goldSpent } = await createPost(text);
+  async function publish(text, audience) {
+    const { post, goldSpent } = await createPost(text, null, audience);
     setPosts([post, ...posts]);
     spent(goldSpent);
   }
@@ -65,9 +68,9 @@ export default function Tavern({ active }) {
         <span className="hint">Posting as {me.username}</span>
       </div>
 
-      <Composer gold={me.bankGold} placeholder="What did you find down there?" submitLabel="Post" onSubmit={publish} />
+      <Composer gold={me.bankGold} placeholder="What did you find down there?" submitLabel="Post" chooseAudience onSubmit={publish} />
 
-      <FollowBox onChange={refresh} />
+      <Friends key={blocks} onChange={refresh} />
 
       {posts.length === 0 && (
         <p className="hint">Nothing here yet. Post something, or follow someone to see their posts.</p>
@@ -79,6 +82,10 @@ export default function Tavern({ active }) {
           me={me}
           onSpent={spent}
           onGone={() => setPosts((ps) => ps.filter((x) => x.id !== p.id))}
+          onBlocked={() => {
+            setBlocks((n) => n + 1);
+            refresh();
+          }}
         />
       ))}
       {more && (
@@ -87,38 +94,5 @@ export default function Tavern({ active }) {
         </button>
       )}
     </div>
-  );
-}
-
-// There's no list of players yet, so you follow someone by typing their name.
-function FollowBox({ onChange }) {
-  const [name, setName] = useState('');
-  const [note, setNote] = useState(null);
-
-  async function run(e, doIt, done) {
-    e.preventDefault();
-    const who = name.trim();
-    if (!who) return;
-    try {
-      await doIt(who);
-      setNote({ ok: true, text: `${done} ${who}.` });
-      setName('');
-      onChange();
-    } catch (err) {
-      setNote({ ok: false, text: err.message });
-    }
-  }
-
-  return (
-    <form className="follow-box" onSubmit={(e) => run(e, follow, 'Following')}>
-      <input value={name} placeholder="username" onChange={(e) => setName(e.target.value)} />
-      <button type="submit" className="quiet">
-        Follow
-      </button>
-      <button type="button" className="quiet" onClick={(e) => run(e, unfollow, 'Stopped following')}>
-        Unfollow
-      </button>
-      {note && <span className={note.ok ? 'hint' : 'error'}>{note.text}</span>}
-    </form>
   );
 }

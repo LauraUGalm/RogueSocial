@@ -1,5 +1,8 @@
 package com.roguesocial.user;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -65,6 +68,19 @@ public class UserRepository {
                 .param("id", userId)
                 .query(ROW)
                 .optional();
+    }
+
+    /** Usernames by user ID, in one query. IDs with no player are left out. */
+    public Map<Long, String> usernames(Collection<Long> userIds) {
+        Map<Long, String> names = new HashMap<>();
+        if (userIds.isEmpty()) {
+            return names;
+        }
+        db.sql("SELECT user_id, username FROM users WHERE user_id IN (:ids)")
+                .param("ids", userIds)
+                .query((rs, n) -> names.put(rs.getLong("user_id"), rs.getString("username")))
+                .list();
+        return names;
     }
 
     /**

@@ -291,7 +291,7 @@ under Apache 2.0.
   The server takes the gold first, then writes the post, and gives the gold back if the write
   fails.
 
-#### Friends, audiences and the grace period (not built yet)
+#### Friends, audiences and the grace period (friends and audiences built; grace period not yet)
 
 - **Decided** (2026-10-22): Players have both follows and friends. Following stays one-way and
   needs no permission. Friendship is two-way: one player sends a request, the other accepts or
@@ -303,18 +303,30 @@ under Apache 2.0.
   refunded in full. Nobody else saw it, so there's no harm done. This is the one exception to
   deletes giving no gold back, and it can't be abused for the same reason: a post nobody saw
   can't get noticed.
-- **Proposed**: A friendship is one document per pair in a `friendships` collection, with the
-  two user IDs stored in a fixed order (lower first) and a unique index on the pair, so A–B and
-  B–A can't both exist. It records who asked and a status: `pending`, then `accepted`. A declined
-  request is removed.
-- **Proposed**: A post stores `audience` and `liveAt` (its creation time plus 1 minute). Anything
-  that shows posts to other people filters on `liveAt` up to now, and on audience; the author
-  always sees their own.
-- **Proposed**: The feed shows followers posts from everyone you follow or are friends with, and
-  friends posts from your friends. Since anyone can follow anyone, a followers post is in effect
-  public.
-- **Proposed**: A reply goes to the same audience as its post, and can't be liked or replied to
-  until it is live.
+- **Proposed** (as built 2026-10-25): A friendship is one document per pair in a `friendships`
+  collection, with the two user IDs stored in a fixed order (`lowId`, `highId`) and a unique
+  index on the pair, so A–B and B–A can't both exist. It records who asked (`requesterId`) and a
+  status: `PENDING`, then `ACCEPTED`. A declined request is removed. (An array of the two IDs
+  would read better, but a unique index on an array applies to each element alone, so each
+  player could only be in one friendship.)
+- **Proposed** (as built): Asking someone who has already asked you accepts their request, so
+  "Add friend" and "Accept" are the same request. Unfriending, declining and taking back your
+  own request are all one removal of the pair's document.
+- **Proposed** (as built): With no notifications yet, requests waiting on a player are shown at
+  the top of the Tavern, above their friends list.
+- **Proposed** (audience as built 2026-10-25): A post stores `audience` (`FOLLOWERS` or
+  `FRIENDS`, chosen with a radio button on the post box) and `liveAt` (its creation time plus 1
+  minute; not built yet). Anything that shows posts to other people filters on `liveAt` up to
+  now, and on audience; the author always sees their own. Posts from before audiences have no
+  `audience` field and count as followers posts, so no migration was needed.
+- **Proposed** (as built): The feed shows followers posts from everyone you follow or are friends
+  with, and friends posts from your friends. Since anyone can follow anyone, a followers post is
+  in effect public.
+- **Proposed** (as built): Someone who isn't a friend asking for a friends post by its ID, its
+  replies, or to like or reply to it, is told there's no such post (`404`), so they can't learn
+  it exists. Unfriending takes effect at once, since every request checks.
+- **Proposed** (audience as built): A reply goes to the same audience as its post, and can't be
+  liked or replied to until it is live.
 - **Open**: Whether an edit during the grace minute restarts the minute.
 - **Open**: What friendship gives besides friends-only posts (on profiles, or in the game).
 
@@ -338,23 +350,34 @@ under Apache 2.0.
   server (`no-cache`), so an unfriended or blocked player's browser can't keep showing the
   latest picture. What someone saw while they were friends can't be taken back (screenshots).
 
-#### Blocking (not built yet)
+#### Blocking (built 2026-10-25)
 
 - **Decided** (2026-10-22): A player can block another. The reason the picture check matters:
   if pictures sat at public addresses like `/avatars/claude.png`, someone who was blocked could
   keep loading that address and watch every new picture without anyone knowing. Because every
   picture request goes through the server's check, a block takes effect at once, even on an
   address the blocked player saved.
-- **Proposed**: Blocking ends any friendship and any pending request, removes follows in both
-  directions, hides each player's posts, replies and picture from the other, and stops new
-  follows and friend requests between them. Unblocking undoes none of that: they start over.
-- **Proposed**: Blocks are one document per blocker and blocked player in a `blocks` collection,
-  with a unique index on the pair. Every visibility check asks it in both directions.
+- **Proposed** (as built, pictures aside): Blocking ends any friendship and any pending
+  request, removes follows in both directions, hides each player's posts, replies and picture
+  from the other, and stops new follows and friend requests between them. Unblocking undoes none
+  of that: they start over.
+- **Proposed** (as built): Blocks are one document per blocker and blocked player in a `blocks`
+  collection, with a unique index on the pair. Every visibility check asks it in both directions.
+  Unlike a friendship, a block has a direction, since only the blocker can undo it.
+- **Proposed** (as built): The block is written before the clean-up, so a follow or request
+  arriving in between is refused rather than surviving it.
+- **Proposed** (as built): A reply from either player under someone else's post is left out of
+  the replies, though the post's reply count still includes it.
+- **Proposed** (as built): Until there are profiles, the list of blocked players is in the
+  Tavern, under the friends list, shown only when there's someone on it.
 - **Decided** (2026-10-22): A player can see the list of players they have blocked, and unblock
   from it, in case they blocked the wrong person or have forgiven them. It is on their own
   profile, under a privacy setting that only they see. It is reached from their side because a
   blocked player's posts and profile are hidden, so there is nothing of theirs to unblock from.
-- **Open**: Whether the blocked player is told, or just sees the other player vanish.
+- **Proposed** (as built): The blocked player isn't told. The other player's posts vanish, and
+  trying to follow or friend them says there's no such player, the same as if they had left.
+  The one who blocked is told to unblock first. (Their stats at `GET /api/users/{username}` are
+  still visible, so a determined player could work it out.)
 
 #### Compared with old Twitter (to talk about after the friends batch)
 
@@ -435,14 +458,16 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 - Closing the tab and coming back resumes the run, with the map so far.
 - Posts, replies, edits, likes, follows and the feed (section 11), stored in MongoDB. Posting
   spends banked gold from Postgres, one per visible symbol; an emoji is one.
+- Friends: requests, accepting, declining and unfriending, in the Tavern. Friends' posts are in
+  the feed. Posts are for followers or for friends only. Blocking, with a list to unblock from.
+  The grace period and profiles are not built yet.
 - A d-pad under the map moves the player on touch screens, the same as the arrow keys.
 
 **Next**
 
-1. **Friends, post audiences, the grace period, blocking, and profiles with profile
-   pictures.** Friends with requests, followers and friends-only posts, a 1-minute window to
-   take a post back, blocking, and profile pictures (in GridFS, shown only to friends) are
-   designed in section 11.
+1. **The grace period, and profiles with profile pictures.** Friends, post audiences and
+   blocking are built. The 1-minute window to take a post back and profile pictures (in GridFS,
+   shown only to friends) are designed in section 11.
    Still to decide: what a profile shows (section 12).
 2. **Talk about what's missing compared with old Twitter** (section 11): notifications first,
    then retweets, mentions, search, direct messages and the rest.
@@ -550,17 +575,23 @@ as the signed-in player with it. Someone else's run is `404`.
 | Request | Does |
 |---|---|
 | `GET /api/me` | `{username, bankGold}`: who you are acting as, and the gold you can post with. |
-| `POST /api/posts` with `{"text": "...", "replyTo": null}` | Posts, or replies when `replyTo` is a post's `id`. `201` with `{post, goldSpent}`. `402` without the gold, `400` for a blank post or a reply to a reply. |
+| `POST /api/posts` with `{"text": "...", "replyTo": null, "audience": "FOLLOWERS"}` | Posts, or replies when `replyTo` is a post's `id`. `audience` is `FOLLOWERS` (the default) or `FRIENDS`; a reply takes its post's. `201` with `{post, goldSpent}`. `402` without the gold, `400` for a blank post or a reply to a reply. |
 | `PATCH /api/posts/{id}` with `{"text": "..."}` | Edits your post, paying for any new symbols. `403` if it isn't yours. |
 | `DELETE /api/posts/{id}` | Deletes your post, refunding nothing. `204` if it is gone, or `200` with the tombstone if it has replies. `403` if it isn't yours. |
-| `GET /api/posts/{id}` | One post. |
+| `GET /api/posts/{id}` | One post. `404` for a friends post if you aren't the author's friend, or across a block either way, here and for its replies and likes. |
 | `GET /api/posts/{id}/replies` | Its replies, oldest first (up to 100). |
 | `PUT` / `DELETE /api/posts/{id}/like` | Likes or unlikes; both are safe to repeat. Returns the post. |
-| `PUT` / `DELETE /api/follows/{username}` | Follows or unfollows. `204`. |
-| `GET /api/feed?before={id}` | 20 posts from you and the people you follow, newest first. Pass the last `id` for the next page. |
+| `PUT` / `DELETE /api/follows/{username}` | Follows or unfollows. `204`. Following someone who blocked you is `404`, as is a friend request; someone you blocked is `400`. |
+| `GET /api/friends` | `{friends, incoming, outgoing}`: usernames of your friends, of who has asked you, and of who you have asked. |
+| `PUT /api/friends/{username}` | Asks them to be friends, or accepts if they already asked. Safe to repeat. Returns your lists. |
+| `DELETE /api/friends/{username}` | Unfriends, declines their request, or takes back yours. Returns your lists. |
+| `GET /api/blocks` | Usernames you have blocked. Only you see this. |
+| `PUT /api/blocks/{username}` | Blocks them: ends any friendship, request and follows between you, and hides each of you from the other. Safe to repeat. Returns your list. |
+| `DELETE /api/blocks/{username}` | Unblocks them. Nothing the block ended comes back. Returns your list. |
+| `GET /api/feed?before={id}` | 20 posts from you, the people you follow and your friends, newest first. Pass the last `id` for the next page. |
 
 A post is `{id, authorId, authorName, text, paid, createdAt, editedAt, deletedAt, replyTo,
-likeCount, replyCount, liked}`, where `liked` says whether you have liked it. A tombstone has
+likeCount, replyCount, audience, liked}`, where `liked` says whether you have liked it. A tombstone has
 `deletedAt` set and `text` null; liking, editing or replying to it gets `400`. `503` means a database is down.
 
 ### Layout
@@ -571,8 +602,8 @@ backend/src/main/java/com/roguesocial/
 ├── dungeon/   Floor, FloorGenerator, RoomCarver, LineOfSight, Run, RunService, RunStore, Bank,
 │              Monster, EnemyType, EnemyCatalog, MonsterTurns, Combat, PlayerStats
 ├── enemy/     EnemyRepository (the enemies table)
-├── social/    Post, Follow, Like (Mongo documents), PostCost, PostService, FollowService,
-│              SocialIndexes, Purse (gold for posts, implemented by UserBank)
+├── social/    Post, Follow, Like, Friendship, Block (Mongo documents), PostCost, PostService,
+│              FollowService, FriendService, BlockService, SocialIndexes, Purse (gold for posts, implemented by UserBank)
 ├── user/      User, UserRepository, UserBank, UserStats (SQL via JdbcClient), Levels (the exp
 │              curve and what a level adds), UserController,
 │              Accounts and PasswordRules (sign-up, bcrypt), SessionController and Sessions
@@ -587,8 +618,10 @@ frontend/src/
 ├── App.jsx       Sign-in, then the Dungeon and Tavern tabs
 ├── SignIn.jsx    Sign in or sign up, and Brad Bradford
 ├── Dungeon.jsx   Status line, arrow keys and the d-pad, message log
-├── Tavern.jsx    Banked gold, the post box, following, the feed
-├── PostCard.jsx  One post: likes, replies, editing
+├── Tavern.jsx    Banked gold, the post box, the feed
+├── Friends.jsx   Friend requests waiting on you, one box to follow, friend or block by name,
+│                 your friends, who you've blocked
+├── PostCard.jsx  One post: likes, replies, editing, blocking its author
 ├── Composer.jsx  A text box that shows what posting it costs
 ├── cost.js       The cost of a post, counted the way the server counts it
 ├── PlayArea.jsx  Draws the view around the player from the sprite sheet

@@ -5,7 +5,6 @@ import static org.springframework.data.mongodb.core.query.Query.query;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -24,6 +23,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
+import com.roguesocial.social.Post.Audience;
 import com.roguesocial.user.User;
 import com.roguesocial.user.UserRepository;
 
@@ -55,34 +55,46 @@ public class PostService {
     private final UserRepository users;
     private final Purse purse;
     private final FollowService follows;
+    private final FriendService friends;
+    private final BlockService blocks;
 
     public PostService(MongoTemplate mongo, SocialIndexes indexes, UserRepository users, Purse purse,
-            FollowService follows) {
+            FollowService follows, FriendService friends, BlockService blocks) {
         this.mongo = mongo;
         this.indexes = indexes;
         this.users = users;
         this.purse = purse;
         this.follows = follows;
+        this.friends = friends;
+        this.blocks = blocks;
     }
 
-    /** A new post, or a reply when {@code replyTo} is a post's id. */
-    public Posted post(String username, String text, String replyTo) {
+    /**
+     * A new post, or a reply when {@code replyTo} is a post's id. A reply goes to its post's
+     * audience whatever {@code audience} says; a post with none goes to followers.
+     */
+    public Posted post(String username, String text, String replyTo, Audience audience) {
         indexes.ensure();
         User author = user(username);
         int cost = costOf(text);
+        if (audience == null) {
+            audience = Audience.FOLLOWERS;
+        }
         if (replyTo != null) {
             Post parent = find(replyTo);
             if (parent.replyTo() != null) {
                 throw new IllegalArgumentException("Replies are one level deep: reply to the post instead");
             }
+            checkCanSee(author, parent);
             notDeleted(parent);
+            audience = parent.audience() == null ? Audience.FOLLOWERS : parent.audience();
         }
 
         purse.spendGold(author.username(), cost);
         Post saved;
         try {
             saved = mongo.insert(new Post(null, author.userId(), author.username(), text, cost, now(),
-                    null, null, replyTo, 0, 0));
+                    null, null, replyTo, 0, 0, audience));
         } catch (RuntimeException e) {
             purse.refundGold(author.username(), cost);
             throw e;
@@ -125,7 +137,7 @@ public class PostService {
         }
         return new Posted(new Post(post.id(), post.authorId(), post.authorName(), text,
                 post.paid() + extra, post.createdAt(), editedAt, null, post.replyTo(), post.likeCount(),
-                post.replyCount()), extra);
+                post.replyCount(), post.audience()), extra);
     }
 
     /**
@@ -167,7 +179,15 @@ public class PostService {
         return Optional.ofNullable(tombstone);
     }
 
-    public Post find(String postId) {
+    /** One post, if this player may see it. */
+    public Post find(String username, String postId) {
+        Post post = find(postId);
+        checkCanSee(user(username), post);
+        return post;
+    }
+
+    /** Any post, whoever it is for. Only for code that checks who is asking itself. */
+    Post find(String postId) {
         indexes.ensure();
         Post post = ObjectId.isValid(postId) ? mongo.findById(postId, Post.class) : null;
         if (post == null) {
@@ -176,10 +196,14 @@ public class PostService {
         return post;
     }
 
-    /** Oldest first, so a conversation reads top to bottom. */
-    public List<Post> replies(String postId) {
-        find(postId);
-        return mongo.find(query(where("replyTo").is(postId))
+    /**
+     * Oldest first, so a conversation reads top to bottom. Leaves out replies from anyone this
+     * player has blocked or been blocked by. The post's {@code replyCount} still counts them.
+     */
+    public List<Post> replies(String username, String postId) {
+        find(username, postId);
+        Set<Long> hidden = blocks.hiddenFrom(user(username).userId());
+        return mongo.find(query(where("replyTo").is(postId).and("authorId").nin(hidden))
                 .with(Sort.by(Direction.ASC, "_id"))
                 .limit(MAX_REPLIES), Post.class);
     }
@@ -189,6 +213,7 @@ public class PostService {
         indexes.ensure();
         User me = user(username);
         Post post = find(postId);
+        checkCanSee(me, post);
         notDeleted(post);
         try {
             mongo.insert(new Like(null, post.id(), me.userId(), now()));
@@ -230,7 +255,14 @@ public class PostService {
     }
 
     /**
-     * The top-level posts of everyone this player follows, and their own, newest first.
+     * The top-level posts of everyone this player follows or is friends with, and their own,
+     * newest first: their own posts, followers posts from people they follow or are friends with,
+     * and friends posts from their friends.
+     *
+     * <p>That is an {@code $or} of three branches. Mongo plans each branch on its own (each can
+     * use the {@code authorId, _id} index) and merges them back into one newest-first list.
+     * {@code audience $ne FRIENDS} also matches posts with no audience field, from before there
+     * were audiences, so those stay followers posts with no migration.
      *
      * <p>This is "fan-out on read": the feed is put together each time it is asked for. The
      * {@code authorId, _id} index lets Mongo jump to each followed person's newest posts and merge
@@ -240,12 +272,17 @@ public class PostService {
     public List<Post> feed(String username, String before) {
         indexes.ensure();
         User me = user(username);
-        List<Long> authors = new ArrayList<>(follows.following(me.userId()));
-        authors.add(me.userId());
+        List<Long> friendIds = friends.friendIds(me.userId());
+        Set<Long> followed = new HashSet<>(follows.following(me.userId()));
+        followed.addAll(friendIds);
 
         // replyTo "is null" also matches posts with no replyTo field. Spring leaves null fields
         // out of the document, so that's every top-level post.
-        Criteria criteria = where("authorId").in(authors).and("replyTo").is(null);
+        Criteria criteria = new Criteria().orOperator(
+                where("authorId").is(me.userId()),
+                where("authorId").in(followed).and("audience").ne(Audience.FRIENDS),
+                where("authorId").in(friendIds).and("audience").is(Audience.FRIENDS))
+                .and("replyTo").is(null);
         if (before != null) {
             if (!ObjectId.isValid(before)) {
                 throw new IllegalArgumentException("before must be a post id");
@@ -266,6 +303,21 @@ public class PostService {
         // document, so "deletedAt exists" means "is a tombstone".
         mongo.remove(query(where("_id").is(parentId).and("deletedAt").exists(true).and("replyCount").is(0)),
                 Post.class);
+    }
+
+    /**
+     * A friends post, and its replies, are for the author and their friends. Nothing is shown
+     * across a block, either way: not the post, and not a reply under someone else's post. Anyone
+     * who can't see it is told there is no such post, so they can't learn that one exists.
+     */
+    private void checkCanSee(User viewer, Post post) {
+        Post top = post.replyTo() == null ? post : find(post.replyTo());
+        boolean hidden = top.friendsOnly() && top.authorId() != viewer.userId()
+                && !friends.areFriends(viewer.userId(), top.authorId());
+        if (hidden || blocks.between(viewer.userId(), top.authorId())
+                || blocks.between(viewer.userId(), post.authorId())) {
+            throw new NoSuchElementException("No post " + post.id());
+        }
     }
 
     private static void notDeleted(Post post) {

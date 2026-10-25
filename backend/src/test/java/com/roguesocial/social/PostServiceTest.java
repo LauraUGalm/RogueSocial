@@ -2,6 +2,7 @@ package com.roguesocial.social;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -12,9 +13,12 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +57,12 @@ class PostServiceTest {
     private FollowService follows;
 
     @Autowired
+    private FriendService friends;
+
+    @Autowired
+    private BlockService blocks;
+
+    @Autowired
     private MongoTemplate mongo;
 
     @MockitoBean
@@ -67,15 +77,21 @@ class PostServiceTest {
         mongo.remove(new Query(), Post.class);
         mongo.remove(new Query(), Follow.class);
         mongo.remove(new Query(), Like.class);
+        mongo.remove(new Query(), Friendship.class);
+        mongo.remove(new Query(), Block.class);
         for (String name : List.of("ann", "bob", "cat")) {
             when(users.findByUsername(name)).thenReturn(Optional.of(new User(
                     name.charAt(0), name, name + "@example.com", OffsetDateTime.now(), 1, 5, 5, 20)));
         }
+        // Each test user's ID is the first letter of their name, so 'a' (97) is ann.
+        when(users.usernames(any())).thenAnswer(call -> ((Collection<Long>) call.getArgument(0)).stream()
+                .collect(Collectors.toMap(id -> id, id -> Map.of('a', "ann", 'b', "bob", 'c', "cat")
+                        .get((char) id.longValue()))));
     }
 
     @Test
     void postingCostsOneGoldPerSymbol() {
-        PostService.Posted posted = posts.post("ann", "Hello World", null);
+        PostService.Posted posted = posts.post("ann", "Hello World", null, null);
 
         assertThat(posted.goldSpent()).isEqualTo(10);
         assertThat(posted.post().paid()).isEqualTo(10);
@@ -88,34 +104,34 @@ class PostServiceTest {
     void withoutTheGoldNothingIsPosted() {
         when(purse.spendGold(anyString(), anyInt())).thenThrow(new NotEnoughGoldException(3, 10));
 
-        assertThatThrownBy(() -> posts.post("ann", "Hello World", null))
+        assertThatThrownBy(() -> posts.post("ann", "Hello World", null, null))
                 .isInstanceOf(NotEnoughGoldException.class);
         assertThat(mongo.count(new Query(), Post.class)).isZero();
     }
 
     @Test
     void aBlankPostIsRejectedBeforeSpending() {
-        assertThatThrownBy(() -> posts.post("ann", "  \n ", null))
+        assertThatThrownBy(() -> posts.post("ann", "  \n ", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(purse, never()).spendGold(anyString(), anyInt());
     }
 
     @Test
     void repliesAreOneLevelDeep() {
-        Post post = posts.post("ann", "Floor 3 has a troll", null).post();
-        Post reply = posts.post("bob", "Bring a bigger stick", post.id()).post();
-        posts.post("cat", "Or run", post.id());
+        Post post = posts.post("ann", "Floor 3 has a troll", null, null).post();
+        Post reply = posts.post("bob", "Bring a bigger stick", post.id(), null).post();
+        posts.post("cat", "Or run", post.id(), null);
 
         assertThat(posts.find(post.id()).replyCount()).isEqualTo(2);
-        assertThat(posts.replies(post.id())).extracting(Post::text)
+        assertThat(posts.replies("ann", post.id())).extracting(Post::text)
                 .containsExactly("Bring a bigger stick", "Or run");
-        assertThatThrownBy(() -> posts.post("ann", "No", reply.id()))
+        assertThatThrownBy(() -> posts.post("ann", "No", reply.id(), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void anEditPaysOnlyForSymbolsPastWhatWasPaid() {
-        String id = posts.post("ann", "abcdefghij", null).post().id();
+        String id = posts.post("ann", "abcdefghij", null, null).post().id();
 
         assertThat(posts.edit("ann", id, "abcdefghijklmno").goldSpent()).isEqualTo(5);
         assertThat(posts.edit("ann", id, "abc").goldSpent()).as("shorter").isZero();
@@ -130,7 +146,7 @@ class PostServiceTest {
 
     @Test
     void onlyTheAuthorCanEdit() {
-        String id = posts.post("ann", "mine", null).post().id();
+        String id = posts.post("ann", "mine", null, null).post().id();
 
         assertThatThrownBy(() -> posts.edit("bob", id, "yours"))
                 .isInstanceOf(NotYourPostException.class);
@@ -138,7 +154,7 @@ class PostServiceTest {
 
     @Test
     void aPostNobodyRepliedToIsRemovedWithItsLikes() {
-        String id = posts.post("ann", "oops", null).post().id();
+        String id = posts.post("ann", "oops", null, null).post().id();
         posts.like("bob", id);
 
         assertThat(posts.delete("ann", id)).isEmpty();
@@ -149,8 +165,8 @@ class PostServiceTest {
 
     @Test
     void aPostWithRepliesStaysAsATombstone() {
-        String id = posts.post("ann", "Floor 3 has a troll", null).post().id();
-        posts.post("bob", "Bring a bigger stick", id);
+        String id = posts.post("ann", "Floor 3 has a troll", null, null).post().id();
+        posts.post("bob", "Bring a bigger stick", id, null);
         posts.like("bob", id);
 
         Post tombstone = posts.delete("ann", id).orElseThrow();
@@ -158,19 +174,19 @@ class PostServiceTest {
         assertThat(tombstone.text()).isNull();
         assertThat(tombstone.deletedAt()).isNotNull();
         assertThat(tombstone.likeCount()).isZero();
-        assertThat(posts.replies(id)).extracting(Post::text).containsExactly("Bring a bigger stick");
+        assertThat(posts.replies("ann", id)).extracting(Post::text).containsExactly("Bring a bigger stick");
         assertThat(posts.feed("ann", null)).extracting(Post::id).containsExactly(id);
         assertThat(posts.delete("ann", id)).as("again").contains(tombstone);
-        assertThatThrownBy(() -> posts.post("cat", "What troll?", id)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> posts.post("cat", "What troll?", id, null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> posts.edit("ann", id, "back")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> posts.like("cat", id)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void deletingAReplyLowersTheCountAndTheLastOneTakesTheTombstone() {
-        String id = posts.post("ann", "Floor 3 has a troll", null).post().id();
-        String bobs = posts.post("bob", "Bring a bigger stick", id).post().id();
-        String cats = posts.post("cat", "Or run", id).post().id();
+        String id = posts.post("ann", "Floor 3 has a troll", null, null).post().id();
+        String bobs = posts.post("bob", "Bring a bigger stick", id, null).post().id();
+        String cats = posts.post("cat", "Or run", id, null).post().id();
 
         assertThat(posts.delete("bob", bobs)).isEmpty();
         assertThat(posts.find(id).replyCount()).isEqualTo(1);
@@ -182,7 +198,7 @@ class PostServiceTest {
 
     @Test
     void onlyTheAuthorCanDelete() {
-        String id = posts.post("ann", "mine", null).post().id();
+        String id = posts.post("ann", "mine", null, null).post().id();
 
         assertThatThrownBy(() -> posts.delete("bob", id)).isInstanceOf(NotYourPostException.class);
         assertThat(posts.find(id).text()).isEqualTo("mine");
@@ -190,7 +206,7 @@ class PostServiceTest {
 
     @Test
     void eachPlayerLikesAPostOnce() {
-        String id = posts.post("ann", "like me", null).post().id();
+        String id = posts.post("ann", "like me", null, null).post().id();
 
         assertThat(posts.like("bob", id).likeCount()).isEqualTo(1);
         assertThat(posts.like("bob", id).likeCount()).as("again").isEqualTo(1);
@@ -201,9 +217,9 @@ class PostServiceTest {
 
     @Test
     void aPageOfPostsKnowsWhichOnesYouLiked() {
-        String a = posts.post("ann", "a", null).post().id();
-        String b = posts.post("ann", "b", null).post().id();
-        String c = posts.post("ann", "c", null).post().id();
+        String a = posts.post("ann", "a", null, null).post().id();
+        String b = posts.post("ann", "b", null, null).post().id();
+        String c = posts.post("ann", "c", null, null).post().id();
         posts.like("bob", a);
         posts.like("bob", c);
         posts.like("cat", b);
@@ -217,11 +233,11 @@ class PostServiceTest {
     void theFeedShowsWhoYouFollowNewestFirst() {
         follows.follow("ann", "bob");
         follows.follow("ann", "bob");
-        Post first = posts.post("bob", "one", null).post();
-        posts.post("cat", "not followed", null);
-        posts.post("ann", "two", null);
-        posts.post("ann", "a reply", first.id());
-        posts.post("bob", "three", null);
+        Post first = posts.post("bob", "one", null, null).post();
+        posts.post("cat", "not followed", null, null);
+        posts.post("ann", "two", null, null);
+        posts.post("ann", "a reply", first.id(), null);
+        posts.post("bob", "three", null, null);
 
         assertThat(posts.feed("ann", null)).extracting(Post::text).containsExactly("three", "two", "one");
         assertThat(posts.feed("cat", null)).extracting(Post::text).containsExactly("not followed");
@@ -233,7 +249,7 @@ class PostServiceTest {
     @Test
     void theFeedPagesByTheLastPostSeen() {
         for (int i = 1; i <= PostService.PAGE + 5; i++) {
-            posts.post("ann", "post " + i, null);
+            posts.post("ann", "post " + i, null, null);
         }
 
         List<Post> page1 = posts.feed("ann", null);
@@ -249,5 +265,181 @@ class PostServiceTest {
     void youCantFollowYourself() {
         assertThatThrownBy(() -> follows.follow("ann", "ann"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aFriendRequestWaitsUntilTheOtherAsksBack() {
+        friends.request("ann", "bob");
+        friends.request("ann", "bob");
+
+        assertThat(friends.friends("ann")).isEqualTo(new FriendService.Friends(List.of(), List.of(), List.of("bob")));
+        assertThat(friends.friends("bob")).isEqualTo(new FriendService.Friends(List.of(), List.of("ann"), List.of()));
+
+        friends.request("bob", "ann");
+
+        assertThat(friends.friends("ann").friends()).containsExactly("bob");
+        assertThat(friends.friends("bob").friends()).containsExactly("ann");
+        assertThat(mongo.count(new Query(), Friendship.class)).as("one document for the pair").isEqualTo(1);
+    }
+
+    @Test
+    void endingAFriendshipEndsItForBoth() {
+        friends.request("ann", "bob");
+        friends.request("bob", "ann");
+        friends.request("cat", "ann");
+
+        friends.end("bob", "ann");
+        friends.end("ann", "cat");
+
+        assertThat(friends.friends("ann")).isEqualTo(new FriendService.Friends(List.of(), List.of(), List.of()));
+        assertThat(friends.friends("bob").friends()).isEmpty();
+        assertThat(friends.friends("cat").outgoing()).isEmpty();
+    }
+
+    @Test
+    void theFeedShowsFriendsButNotPendingRequests() {
+        posts.post("bob", "from a friend", null, null);
+        friends.request("ann", "bob");
+
+        assertThat(posts.feed("ann", null)).as("only asked").isEmpty();
+
+        friends.request("bob", "ann");
+
+        assertThat(posts.feed("ann", null)).extracting(Post::text).containsExactly("from a friend");
+        assertThat(posts.feed("bob", null)).extracting(Post::text).containsExactly("from a friend");
+    }
+
+    @Test
+    void youCantBeYourOwnFriend() {
+        assertThatThrownBy(() -> friends.request("ann", "ann"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aFriendsPostIsOnlyForFriends() {
+        friends.request("ann", "bob");
+        friends.request("bob", "ann");
+        follows.follow("cat", "ann");
+        Post secret = posts.post("ann", "for friends", null, Post.Audience.FRIENDS).post();
+        posts.post("ann", "for everyone", null, null);
+
+        assertThat(posts.feed("bob", null)).extracting(Post::text).containsExactly("for everyone", "for friends");
+        assertThat(posts.feed("cat", null)).extracting(Post::text).containsExactly("for everyone");
+        assertThat(posts.feed("ann", null)).hasSize(2);
+
+        assertThat(posts.find("bob", secret.id()).text()).isEqualTo("for friends");
+        assertThatThrownBy(() -> posts.find("cat", secret.id())).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> posts.replies("cat", secret.id())).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> posts.like("cat", secret.id())).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> posts.post("cat", "let me in", secret.id(), null))
+                .isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void aReplyGoesToItsPostsAudience() {
+        friends.request("ann", "bob");
+        friends.request("bob", "ann");
+        Post secret = posts.post("ann", "for friends", null, Post.Audience.FRIENDS).post();
+
+        Post reply = posts.post("bob", "me too", secret.id(), Post.Audience.FOLLOWERS).post();
+
+        assertThat(reply.audience()).isEqualTo(Post.Audience.FRIENDS);
+        assertThatThrownBy(() -> posts.like("cat", reply.id())).isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void unfriendingHidesTheirFriendsPosts() {
+        friends.request("ann", "bob");
+        friends.request("bob", "ann");
+        follows.follow("bob", "ann");
+        Post secret = posts.post("ann", "for friends", null, Post.Audience.FRIENDS).post();
+
+        friends.end("ann", "bob");
+
+        assertThat(posts.feed("bob", null)).isEmpty();
+        assertThatThrownBy(() -> posts.find("bob", secret.id())).isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void postsFromBeforeAudiencesAreForFollowers() {
+        follows.follow("bob", "ann");
+        mongo.insert(new org.bson.Document("authorId", (long) 'a').append("authorName", "ann")
+                .append("text", "old").append("paid", 3).append("likeCount", 0).append("replyCount", 0), "posts");
+
+        assertThat(posts.feed("bob", null)).extracting(Post::text).containsExactly("old");
+    }
+
+    @Test
+    void blockingEndsFriendshipAndFollowsBothWays() {
+        friends.request("ann", "bob");
+        friends.request("bob", "ann");
+        follows.follow("ann", "bob");
+        follows.follow("bob", "ann");
+        posts.post("ann", "from ann", null, null);
+        posts.post("bob", "from bob", null, null);
+
+        blocks.block("ann", "bob");
+        blocks.block("ann", "bob");
+
+        assertThat(friends.friends("ann").friends()).isEmpty();
+        assertThat(friends.friends("bob").friends()).isEmpty();
+        assertThat(mongo.count(new Query(), Follow.class)).isZero();
+        assertThat(posts.feed("ann", null)).extracting(Post::text).containsExactly("from ann");
+        assertThat(posts.feed("bob", null)).extracting(Post::text).containsExactly("from bob");
+        assertThat(blocks.blocked("ann")).containsExactly("bob");
+        assertThat(blocks.blocked("bob")).isEmpty();
+    }
+
+    @Test
+    void aBlockStopsNewFollowsAndRequestsEitherWay() {
+        blocks.block("ann", "bob");
+
+        assertThatThrownBy(() -> follows.follow("ann", "bob"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("unblock");
+        assertThatThrownBy(() -> friends.request("ann", "bob")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> follows.follow("bob", "ann"))
+                .isInstanceOf(NoSuchElementException.class).hasMessage("No user ann");
+        assertThatThrownBy(() -> friends.request("bob", "ann")).isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void aBlockHidesPostsAndRepliesBothWays() {
+        Post anns = posts.post("ann", "by ann", null, null).post();
+        Post cats = posts.post("cat", "by cat", null, null).post();
+        Post bobsReply = posts.post("bob", "bob replies", cats.id(), null).post();
+        posts.post("ann", "ann replies", cats.id(), null);
+
+        blocks.block("ann", "bob");
+
+        assertThatThrownBy(() -> posts.find("bob", anns.id())).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> posts.like("bob", anns.id())).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> posts.post("bob", "hey", anns.id(), null)).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> posts.like("ann", bobsReply.id())).isInstanceOf(NoSuchElementException.class);
+        assertThat(posts.replies("ann", cats.id())).extracting(Post::text).containsExactly("ann replies");
+        assertThat(posts.replies("bob", cats.id())).extracting(Post::text).containsExactly("bob replies");
+        assertThat(posts.replies("cat", cats.id())).hasSize(2);
+    }
+
+    @Test
+    void unblockingStartsOver() {
+        friends.request("ann", "bob");
+        friends.request("bob", "ann");
+        blocks.block("ann", "bob");
+
+        blocks.unblock("ann", "bob");
+
+        assertThat(friends.friends("ann").friends()).isEmpty();
+        assertThat(blocks.blocked("ann")).isEmpty();
+        follows.follow("bob", "ann");
+        assertThat(posts.feed("bob", null)).isEmpty();
+    }
+
+    @Test
+    void onlyTheBlockerCanUnblock() {
+        blocks.block("ann", "bob");
+
+        blocks.unblock("bob", "ann");
+
+        assertThat(blocks.blocked("ann")).containsExactly("bob");
     }
 }

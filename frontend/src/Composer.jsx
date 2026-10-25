@@ -3,9 +3,20 @@ import EmojiPicker from './EmojiPicker.jsx';
 import { postCost } from './cost.js';
 
 // A text box that shows what posting it will cost. Used for new posts, replies and edits.
-// `paid` is what the post has already paid for, so an edit only shows the extra.
-export default function Composer({ initial = '', paid = 0, gold, placeholder, submitLabel, onSubmit, onCancel }) {
+// `paid` is what the post has already paid for, so an edit only shows the extra. With
+// `chooseAudience`, it asks who the post is for and calls onSubmit(text, audience).
+export default function Composer({
+  initial = '',
+  paid = 0,
+  gold,
+  placeholder,
+  submitLabel,
+  chooseAudience = false,
+  onSubmit,
+  onCancel,
+}) {
   const [text, setText] = useState(initial);
+  const [audience, setAudience] = useState('FOLLOWERS');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const box = useRef(null);
@@ -38,7 +49,7 @@ export default function Composer({ initial = '', paid = 0, gold, placeholder, su
     setSending(true);
     setError(null);
     try {
-      await onSubmit(text);
+      await onSubmit(text, audience);
       setText('');
     } catch (err) {
       setError(err.message);
@@ -58,6 +69,18 @@ export default function Composer({ initial = '', paid = 0, gold, placeholder, su
       />
       <div className="composer-bar">
         <EmojiPicker onPick={insert} />
+        {chooseAudience && (
+          <span className="radios">
+            <label>
+              <input type="radio" checked={audience === 'FOLLOWERS'} onChange={() => setAudience('FOLLOWERS')} />
+              Followers
+            </label>
+            <label>
+              <input type="radio" checked={audience === 'FRIENDS'} onChange={() => setAudience('FRIENDS')} />
+              Friends
+            </label>
+          </span>
+        )}
         <span className={tooDear ? 'cost error' : 'cost'}>
           {symbols === 0
             ? 'Write something first'

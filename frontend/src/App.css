@@ -217,6 +217,7 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -237,9 +238,52 @@ input:focus {
   gap: 8px;
 }
 
-.follow-box input {
+.follow-box > input {
   flex: 1 1 140px;
   width: auto;
+}
+
+.friends details > * + * {
+  margin-top: 6px;
+}
+
+.friends summary {
+  cursor: pointer;
+}
+
+.radios {
+  display: flex;
+  gap: 10px;
+}
+
+.radios label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.radios input {
+  width: auto;
+  margin: 0;
+}
+
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.friend-row > span {
+  flex: 1;
+}
+
+.friend-row.request {
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
 }
 
 .post {
@@ -285,7 +329,8 @@ button.icon.danger {
   font-style: italic;
 }
 
-.post footer .confirm {
+.post footer .confirm,
+.friends .confirm {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

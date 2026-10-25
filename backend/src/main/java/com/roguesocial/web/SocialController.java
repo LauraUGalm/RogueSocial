@@ -23,20 +23,24 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 
+import com.roguesocial.social.BlockService;
 import com.roguesocial.social.FollowService;
+import com.roguesocial.social.FriendService;
 import com.roguesocial.social.NotEnoughGoldException;
 import com.roguesocial.social.NotYourPostException;
 import com.roguesocial.social.Post;
+import com.roguesocial.social.Post.Audience;
 import com.roguesocial.social.PostService;
 import com.roguesocial.social.Purse;
 import com.roguesocial.user.SignedIn;
 
-/** Posts, replies, likes, follows and the feed, for whoever is signed in. */
+/** Posts, replies, likes, follows, friends, blocks and the feed, for whoever is signed in. */
 @RestController
 @RequestMapping("/api")
 public class SocialController {
 
-    public record NewPost(String text, String replyTo) {
+    /** {@code audience} is ignored for a reply, which goes to its post's audience. */
+    public record NewPost(String text, String replyTo, Audience audience) {
     }
 
     public record EditedPost(String text) {
@@ -55,11 +59,16 @@ public class SocialController {
 
     private final PostService posts;
     private final FollowService follows;
+    private final FriendService friends;
+    private final BlockService blocks;
     private final Purse purse;
 
-    public SocialController(PostService posts, FollowService follows, Purse purse) {
+    public SocialController(PostService posts, FollowService follows, FriendService friends,
+            BlockService blocks, Purse purse) {
         this.posts = posts;
         this.follows = follows;
+        this.friends = friends;
+        this.blocks = blocks;
         this.purse = purse;
     }
 
@@ -72,7 +81,7 @@ public class SocialController {
     @ResponseStatus(HttpStatus.CREATED)
     public Posted post(SignedIn me,
             @RequestBody NewPost body) {
-        PostService.Posted posted = posts.post(me.username(), body.text(), body.replyTo());
+        PostService.Posted posted = posts.post(me.username(), body.text(), body.replyTo(), body.audience());
         return new Posted(new PostView(posted.post(), false), posted.goldSpent());
     }
 
@@ -95,13 +104,13 @@ public class SocialController {
     @GetMapping("/posts/{id}")
     public PostView find(SignedIn me,
             @PathVariable String id) {
-        return views(me.username(), List.of(posts.find(id))).getFirst();
+        return views(me.username(), List.of(posts.find(me.username(), id))).getFirst();
     }
 
     @GetMapping("/posts/{id}/replies")
     public List<PostView> replies(SignedIn me,
             @PathVariable String id) {
-        return views(me.username(), posts.replies(id));
+        return views(me.username(), posts.replies(me.username(), id));
     }
 
     @PutMapping("/posts/{id}/like")
@@ -128,6 +137,49 @@ public class SocialController {
     public void unfollow(SignedIn me,
             @PathVariable String username) {
         follows.unfollow(me.username(), username);
+    }
+
+    @GetMapping("/friends")
+    public FriendService.Friends friends(SignedIn me) {
+        return friends.friends(me.username());
+    }
+
+    /** Sends a friend request, or accepts theirs. Returns your lists as they are now. */
+    @PutMapping("/friends/{username}")
+    public FriendService.Friends befriend(SignedIn me,
+            @PathVariable String username) {
+        friends.request(me.username(), username);
+        return friends.friends(me.username());
+    }
+
+    /** Unfriends, declines their request, or takes back yours. */
+    @DeleteMapping("/friends/{username}")
+    public FriendService.Friends unfriend(SignedIn me,
+            @PathVariable String username) {
+        friends.end(me.username(), username);
+        return friends.friends(me.username());
+    }
+
+    /** Who you have blocked. Nobody else can see this. */
+    @GetMapping("/blocks")
+    public List<String> blocked(SignedIn me) {
+        return blocks.blocked(me.username());
+    }
+
+    /** Blocks them, ending any friendship, request and follows between you. Returns your list. */
+    @PutMapping("/blocks/{username}")
+    public List<String> block(SignedIn me,
+            @PathVariable String username) {
+        blocks.block(me.username(), username);
+        return blocks.blocked(me.username());
+    }
+
+    /** Unblocks them. What the block ended stays ended. Returns your list. */
+    @DeleteMapping("/blocks/{username}")
+    public List<String> unblock(SignedIn me,
+            @PathVariable String username) {
+        blocks.unblock(me.username(), username);
+        return blocks.blocked(me.username());
     }
 
     @GetMapping("/feed")

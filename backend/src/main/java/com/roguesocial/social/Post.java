@@ -26,6 +26,8 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
  *                   ObjectId, not a string, so it matches the parent's {@code _id}
  * @param likeCount  kept on the post so showing a post doesn't count its likes
  * @param replyCount the same, for replies
+ * @param audience   who may see it. A reply has its post's audience. Posts from before
+ *                   audiences have none, which counts as {@link Audience#FOLLOWERS}
  */
 @Document("posts")
 public record Post(
@@ -39,5 +41,18 @@ public record Post(
         Instant deletedAt,
         @Field(targetType = FieldType.OBJECT_ID) String replyTo,
         int likeCount,
-        int replyCount) {
+        int replyCount,
+        Audience audience) {
+
+    /**
+     * Stored as the name. {@code FOLLOWERS} posts are seen by followers and friends, so in effect
+     * by anyone, since anyone can follow. {@code FRIENDS} posts are seen only by friends.
+     */
+    public enum Audience {
+        FOLLOWERS, FRIENDS
+    }
+
+    public boolean friendsOnly() {
+        return audience == Audience.FRIENDS;
+    }
 }
