@@ -123,6 +123,8 @@ class PostServiceTest {
 
     @Test
     void repliesAreOneLevelDeep() {
+        follows.follow("bob", "ann");
+        follows.follow("cat", "ann");
         Post post = posts.post("ann", "Floor 3 has a troll", null, null).post();
         Post reply = posts.post("bob", "Bring a bigger stick", post.id(), null).post();
         posts.post("cat", "Or run", post.id(), null);
@@ -159,6 +161,7 @@ class PostServiceTest {
 
     @Test
     void aPostNobodyRepliedToIsRemovedWithItsLikes() {
+        follows.follow("bob", "ann");
         String id = posts.post("ann", "oops", null, null).post().id();
         posts.like("bob", id);
 
@@ -170,6 +173,8 @@ class PostServiceTest {
 
     @Test
     void aPostWithRepliesStaysAsATombstone() {
+        follows.follow("bob", "ann");
+        follows.follow("cat", "ann");
         String id = posts.post("ann", "Floor 3 has a troll", null, null).post().id();
         posts.post("bob", "Bring a bigger stick", id, null);
         posts.like("bob", id);
@@ -189,6 +194,8 @@ class PostServiceTest {
 
     @Test
     void deletingAReplyLowersTheCountAndTheLastOneTakesTheTombstone() {
+        follows.follow("bob", "ann");
+        follows.follow("cat", "ann");
         String id = posts.post("ann", "Floor 3 has a troll", null, null).post().id();
         String bobs = posts.post("bob", "Bring a bigger stick", id, null).post().id();
         String cats = posts.post("cat", "Or run", id, null).post().id();
@@ -211,6 +218,8 @@ class PostServiceTest {
 
     @Test
     void eachPlayerLikesAPostOnce() {
+        follows.follow("bob", "ann");
+        follows.follow("cat", "ann");
         String id = posts.post("ann", "like me", null, null).post().id();
 
         assertThat(posts.like("bob", id).likeCount()).isEqualTo(1);
@@ -222,6 +231,8 @@ class PostServiceTest {
 
     @Test
     void aPageOfPostsKnowsWhichOnesYouLiked() {
+        follows.follow("bob", "ann");
+        follows.follow("cat", "ann");
         String a = posts.post("ann", "a", null, null).post().id();
         String b = posts.post("ann", "b", null, null).post().id();
         String c = posts.post("ann", "c", null, null).post().id();
@@ -409,6 +420,9 @@ class PostServiceTest {
 
     @Test
     void aBlockHidesPostsAndRepliesBothWays() {
+        follows.follow("bob", "ann");
+        follows.follow("bob", "cat");
+        follows.follow("ann", "cat");
         Post anns = posts.post("ann", "by ann", null, null).post();
         Post cats = posts.post("cat", "by cat", null, null).post();
         Post bobsReply = posts.post("bob", "bob replies", cats.id(), null).post();
@@ -446,5 +460,22 @@ class PostServiceTest {
         blocks.unblock("bob", "ann");
 
         assertThat(blocks.blocked("ann")).containsExactly("bob");
+    }
+
+    @Test
+    void aFollowersPostNeedsAFollowToOpen() {
+        Post post = posts.post("ann", "for followers", null, null).post();
+
+        assertThatThrownBy(() -> posts.find("cat", post.id())).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> posts.like("cat", post.id())).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> posts.post("cat", "hi", post.id(), null)).isInstanceOf(NoSuchElementException.class);
+
+        follows.follow("cat", "ann");
+        assertThat(posts.find("cat", post.id()).text()).isEqualTo("for followers");
+
+        follows.unfollow("cat", "ann");
+        friends.request("ann", "cat");
+        friends.request("cat", "ann");
+        assertThat(posts.find("cat", post.id()).text()).as("a friend who doesn't follow").isEqualTo("for followers");
     }
 }

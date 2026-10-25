@@ -348,14 +348,17 @@ public class PostService {
     }
 
     /**
-     * A friends post, and its replies, are for the author and their friends. Nothing is shown
-     * across a block, either way: not the post, and not a reply under someone else's post. Anyone
-     * who can't see it is told there is no such post, so they can't learn that one exists.
+     * A followers post, and its replies, are for the author's followers and friends; a friends
+     * post only for their friends. The same rule as the feed, so having a post's id doesn't get a
+     * stranger any further than their feed would. Nothing is shown across a block, either way:
+     * not the post, and not a reply under someone else's post. Anyone who can't see it is told
+     * there is no such post, so they can't learn that one exists.
      */
     private void checkCanSee(User viewer, Post post) {
         Post top = post.replyTo() == null ? post : find(post.replyTo());
-        boolean hidden = top.friendsOnly() && top.authorId() != viewer.userId()
-                && !friends.areFriends(viewer.userId(), top.authorId());
+        long me = viewer.userId();
+        boolean hidden = top.authorId() != me && !friends.areFriends(me, top.authorId())
+                && (top.friendsOnly() || !follows.isFollowing(me, top.authorId()));
         boolean waiting = (!top.isLive(now()) && top.authorId() != viewer.userId())
                 || (!post.isLive(now()) && post.authorId() != viewer.userId());
         if (hidden || waiting || blocks.between(viewer.userId(), top.authorId())

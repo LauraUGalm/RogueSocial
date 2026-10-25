@@ -328,8 +328,11 @@ under Apache 2.0.
 - **Proposed** (as built): A reply in its first minute still counts in its post's `replyCount`
   for everyone, though only its author sees it.
 - **Proposed** (as built): The feed shows followers posts from everyone you follow or are friends
-  with, and friends posts from your friends. Since anyone can follow anyone, a followers post is
-  in effect public.
+  with, and friends posts from your friends.
+- **Decided** (2026-10-25): Opening a post by its id follows the same rule as the feed: a
+  followers post needs you to follow the author or be their friend, the same as a Followers
+  gallery picture. Anyone can follow, so it's a small step, but a post's id alone gets a
+  stranger nothing.
 - **Proposed** (as built): Someone who isn't a friend asking for a friends post by its ID, its
   replies, or to like or reply to it, is told there's no such post (`404`), so they can't learn
   it exists. Unfriending takes effect at once, since every request checks.
@@ -351,7 +354,7 @@ under Apache 2.0.
 - **Decided** (2026-10-25): Each gallery picture has an audience, Followers or Friends, chosen
   on upload like a post's. A gallery holds 30 pictures. Unlike a post, a Followers picture
   really needs a follow (or friendship): a stranger looking at the profile sees none of the
-  gallery. A followers post, by contrast, can be opened by anyone who has its id.
+  gallery. Followers posts work the same way.
 - **Proposed** (as built): One `profiles` document per player, whose `_id` is their user ID
   rather than an ObjectId, so looking one up uses the index Mongo always keeps on `_id`.
 - **Proposed** (as built): Gallery pictures are GridFS files like the profile picture, told
@@ -360,8 +363,9 @@ under Apache 2.0.
 - **Proposed** (as built): The profile shows what the viewer can see: only the gallery pictures
   their audience allows. Across a block, either way, the
   profile, picture and gallery answer that there's no such player.
-- **Open**: The old `GET /api/users/{username}` still shows anyone's level and stats, even across
-  a block. The app doesn't use it; it could go, or check blocks.
+- **Decided** (2026-10-25): The old `GET /api/users/{username}`, which showed anyone's stats
+  without signing in and across blocks, is removed. Nothing used it, and the profile replaces
+  it.
 - **Open**: Photos from phones can come out sideways: the server doesn't yet read the EXIF
   orientation that says which way up a photo was taken.
 - **Open**: A player's own posts on their profile, and lists of their followers and friends.
@@ -420,8 +424,7 @@ under Apache 2.0.
   blocked player's posts and profile are hidden, so there is nothing of theirs to unblock from.
 - **Proposed** (as built): The blocked player isn't told. The other player's posts vanish, and
   trying to follow or friend them says there's no such player, the same as if they had left.
-  The one who blocked is told to unblock first. (Their stats at `GET /api/users/{username}` are
-  still visible, so a determined player could work it out.)
+  The one who blocked is told to unblock first.
 
 #### Compared with old Twitter (to talk about after the friends batch)
 
@@ -511,7 +514,7 @@ A Java 21 / Spring Boot backend and a React frontend, started from Letter Maze.
 **Next**
 
 1. **Finish profiles** (section 11, open items): a player's own posts on their profile,
-   followers and friends lists, sideways phone photos, and the old `/api/users/{username}`.
+   followers and friends lists, and sideways phone photos.
 2. **Talk about what's missing compared with old Twitter** (section 11): notifications first,
    then retweets, mentions, search, direct messages and the rest.
 3. **Deploy to the Raspberry Pi** (`raspi.local`). The Pi already runs Tomcat on port 8080, with
@@ -606,7 +609,6 @@ Every response has `runId`, `turn`, `status` (`ACTIVE`, `LEFT` or `DIED`), `gold
 | Request | Does |
 |---|---|
 | `POST /api/users` with `{"username": "...", "email": "...", "password": "..."}` | Signs up and signs in. `201` with the player. `400` for a bad username or email, or with `problems` (what the password still needs) for a weak password; `409` if the username or email is taken. |
-| `GET /api/users/{username}` | `{userId, username, joined, level, power, defense, maxHealth}` (stats at their level), never the email. `404` if there is none. |
 | `POST /api/session` with `{"username": "...", "password": "..."}` | Signs in. `401` "Wrong username or password", whichever was wrong. |
 | `GET /api/session` | The signed-in player, or `401`. |
 | `DELETE /api/session` | Signs out. `204`. |
@@ -621,7 +623,7 @@ as the signed-in player with it. Someone else's run is `404`.
 | `PATCH /api/posts/{id}` with `{"text": "..."}` | Edits your post, paying for any new symbols. `403` if it isn't yours. |
 | `DELETE /api/posts/{id}` | Deletes your post, refunding nothing. `204` if it is gone, or `200` with the tombstone if it has replies. `403` if it isn't yours. |
 | `POST /api/posts/{id}/take-back` | In a post's first minute, removes it and refunds all it cost: `{goldRefunded}`. `409` once it's live, `403` if it isn't yours. |
-| `GET /api/posts/{id}` | One post. `404` for a friends post if you aren't the author's friend, or across a block either way, here and for its replies and likes. |
+| `GET /api/posts/{id}` | One post. `404` unless you're the author's friend, or follow them and it's a followers post (or it's yours), and across a block either way, here and for its replies and likes. |
 | `GET /api/posts/{id}/replies` | Its replies, oldest first (up to 100). |
 | `PUT` / `DELETE /api/posts/{id}/like` | Likes or unlikes; both are safe to repeat. Returns the post. |
 | `PUT` / `DELETE /api/follows/{username}` | Follows or unfollows. `204`. Following someone who blocked you is `404`, as is a friend request; someone you blocked is `400`. |

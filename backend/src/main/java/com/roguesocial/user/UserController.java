@@ -2,14 +2,11 @@ package com.roguesocial.user;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
-import java.util.NoSuchElementException;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,7 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.roguesocial.dungeon.PlayerStats;
 
-/** Signing up, and looking up players. */
+/**
+ * Signing up. Looking a player up is {@code GET /api/profiles/{username}}, which needs signing in
+ * and hides players across a block.
+ */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -26,7 +26,7 @@ public class UserController {
     public record NewUser(String username, String email, String password) {
     }
 
-    /** What anyone may see about a player. Never includes the email. */
+    /** What a new player gets back on signing up. Never includes the email. */
     public record PublicUser(
             long userId, String username, OffsetDateTime joined,
             int level, int power, int defense, int maxHealth) {
@@ -37,11 +37,9 @@ public class UserController {
         }
     }
 
-    private final UserRepository users;
     private final Accounts accounts;
 
-    public UserController(UserRepository users, Accounts accounts) {
-        this.users = users;
+    public UserController(Accounts accounts) {
         this.accounts = accounts;
     }
 
@@ -52,19 +50,6 @@ public class UserController {
         User user = accounts.signUp(body.username(), body.email(), body.password());
         Sessions.signIn(request, user);
         return PublicUser.of(user);
-    }
-
-    @GetMapping("/{username}")
-    public PublicUser find(@PathVariable String username) {
-        return users.findByUsername(username)
-                .map(PublicUser::of)
-                .orElseThrow(() -> new NoSuchElementException("No user " + username));
-    }
-
-    @ExceptionHandler(NoSuchElementException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Map<String, String> notFound(NoSuchElementException e) {
-        return Map.of("error", e.getMessage());
     }
 
     @ExceptionHandler(UsernameTakenException.class)
